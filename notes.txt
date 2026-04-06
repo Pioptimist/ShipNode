@@ -1,0 +1,34 @@
+the flow for a project with ts like his one which uses neon and drizzle is=>
+first of all install every @types version like cors cookies.
+then make a tsconfig.json in backend folder
+then create a .env in root of backend then connect it in env.ts and then use it in server.
+then create a db folder , connec to neon in index.js and tell it we are going to use drizzle like : export const db = drizzle(sql);
+************************************
+the localhost or local machine sppofs the browser into beleiving we are ssl certificaed but this spoof breaks if we do https//localhost instead of http;//localhost . so always make sure to have http
+************************************
+neon is serverless ie it sleeps if server is empty and hence take time to awake when a new req hits , its like atlas in mongodb and drizzle is orm which helps us write sql commands to use postgres and manage tables.
+
+*************************************
+There is no “connect once and stay connected” like Mongoose.
+Neon (serverless) + Drizzle works more like:
+
+“Send a query → connection happens → result comes back” so like in earlier mongo we used to make a func called conndb and used to console server connected , we cant do that since server dies when no req are sent within 10-15 mins time frame. so to check if connection to neon is success in start server just run this const res = await db.execute("SELECT 1");
+    console.log("DB connected successfully:", res); , basically means , We are asking the database to return a constant value (1) as a result, just to verify it responds.
+this returns a js object.
+
+*************************************
+in script of package , what are drizzle push and generate?
+db:push (instant sync)
+drizzle-kit push
+Takes your schema: schema.ts and directly creates tables in DB
+No history
+No migration files
+Just “make DB look like schema” , instant work.
+
+db:generate (migration system)
+drizzle-kit generate
+Compares: current schema and previous schema
+Generates SQL like:
+CREATE TABLE users...
+ALTER TABLE...
+Saves in: /drizzle folder , since in drizzle config we said out:"./drizzle" hence it wil crate a drizzle folder on generate in backend folder root.

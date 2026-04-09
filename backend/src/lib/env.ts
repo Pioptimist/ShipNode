@@ -1,7 +1,5 @@
 import dotenv from "dotenv";
 
-
-
 dotenv.config({override : true});
 const getEnv = (key: string, defaultValue?: string): string => {
   const value = process.env[key] || defaultValue;
@@ -14,19 +12,17 @@ const getEnv = (key: string, defaultValue?: string): string => {
 export const ENV = {
   // Server
   PORT: parseInt(getEnv("PORT"), 10),
-  DB_URL: getEnv("DB_URL")
+  DB_URL: getEnv("DB_URL"),
+  GITHUB_CLIENT_ID: getEnv("GITHUB_CLIENT_ID"),
+  API_URL: getEnv("API_URL"),
+  GITHUB_CLIENT_SECRET: getEnv("GITHUB_CLIENT_SECRET"),
+  ACCESS_SECRET: getEnv("ACCESS_SECRET"),
+  REFRESH_SECRET: getEnv("REFRESH_SECRET"),
+  ENCRYPTION_KEY: getEnv("ENCRYPTION_KEY"),
+  FRONTEND_URL: getEnv("FRONTEND_URL"),
 
 };
-//   FRONTEND_URL: getEnv("FRONTEND_URL"),
 
-//   // Database
-//   
-
-//   // Security & Auth
-//   ENCRYPTION_KEY: getEnv("ENCRYPTION_KEY"), // The 32-byte AES-256 key
-//   GITHUB_CLIENT_ID: getEnv("GITHUB_CLIENT_ID"),
-//   GITHUB_CLIENT_SECRET: getEnv("GITHUB_CLIENT_SECRET"),
-//   JWT_SECRET: getEnv("JWT_SECRET"),
 
 //   // Cloudflare R2 Storage
 //   R2_ACCESS_KEY_ID: getEnv("R2_ACCESS_KEY_ID"),

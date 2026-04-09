@@ -32,3 +32,108 @@ Generates SQL like:
 CREATE TABLE users...
 ALTER TABLE...
 Saves in: /drizzle folder , since in drizzle config we said out:"./drizzle" hence it wil crate a drizzle folder on generate in backend folder root.
+
+to see the table use npx drizzle-kit studio, open the link in there after we either pushed or generated . always use push in dev its fast and instant , generate is for prof env.
+
+******************************************
+Database → your Neon DB (you usually don’t delete this)
+Schema → a namespace (default is public)
+Tables → inside schema
+never delete the schema , basically delete every table 
+******************************************
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  subdomain: varchar("subdomain", { length: 255 }).unique().notNull(), 
+  customDomain: varchar("custom_domain", { length: 255 }).unique(), // Added for custom domain mapping
+  repoName: varchar("repo_name", { length: 255 }).notNull(), 
+  createdAt: timestamp("created_at").defaultNow(),
+});
+this is how a table is made , look closel drizzle just turns the sql format to js , is helpful in that way.
+*******************************************
+Phase 1: The Redirect (/api/auth/github)
+Action: Backend generates a GitHub Auth URL.
+Scopes: We request repo (to clone code) and user:email.
+Result: User is redirected to GitHub to click "Authorize."
+
+Phase 2: The Catch (/api/auth/github/callback)
+Action: GitHub sends the user back to this URL with a temporary ?code=.
+Exchange: Backend talks to GitHub's servers (Secret-to-Secret) to trade the code for the actual GitHub Access Token.
+
+Phase 3: The Identity Check
+Action: Backend uses the new token to ask GitHub for the user's githubId and email.
+2. The Data Storage Model (The "Vault")
+We separate "Who the user is" from "What the user can do."
+
+GitHub Access Token (Storage):
+Location: Neon Database (users table).
+Security: Never stored as plain text. It is encrypted using AES-256-GCM.
+Usage: only used by the Backend to talk to GitHub (e.g., cloning repos for builds).
+
+Shipnode Session Token (JWT):
+Location: User's Browser.
+Security: Stored in an HttpOnly Cookie.
+Usage: Used by the Frontend to tell the Backend: "I am User #4."
+
+3. Post-Auth API Flow
+How the app uses these tokens after the user is logged in:
+Request: Frontend requests the repo list: GET /api/repos.
+Verify: Backend reads the HttpOnly Cookie → Verifies JWT → Gets User ID.
+Decrypt: Backend fetches the user from Neon → Decrypts the githubAccessToken.
+Fetch: Backend calls GitHub API using the decrypted token → Returns repos to Frontend.
+
+******************************************************
+everything about crypto and how we use it here=>
+We must hide the data from hackers (if our database is leaked).
+
+We must be able to read the exact original data later.
+
+Why not Bcrypt? Bcrypt is a one-way street. If you bcrypt the GitHub token, it is scrambled forever. You can never use it to fetch the user's repositories.
+
+Why not JWT? JWTs are completely readable by anyone. They just prove who made them; they don't hide secrets
+
+What is iv (Initialization Vector)?
+The Concept: It is a burst of random data mixed into the encryption process.
+Why we need it: Imagine two users have the exact same GitHub token. If we didn't use an iv, both users would have the exact same encrypted string in the database. A hacker could notice this pattern. By injecting a random iv every single time, the same token will output a completely different encrypted string every time you run it.
+
+cipher.update(text, 'utf8', 'hex'): This translates to: "Take my plain text (utf8), push it through the encryption grinder, and spit the scrambled chunks out as hex."
+cipher.final('hex'): This tells Node: "I'm done putting data into the grinder. Flush out whatever is left in the machine and close the lockbox." You add both parts together to get your final encrypted string
+
+What is the authTag?
+This is the absolute best part of the aes-256-gcm algorithm.
+The Concept: It acts as a digital wax seal on the lockbox.
+Why we need it: Let's say a hacker gets into your database and, just to be malicious, changes a single letter of a user's encrypted token. Without an authTag, your server would try to decrypt it, output a mangled, corrupted GitHub token, and your app would crash.
+How it works: When the server tries to decrypt the string, it checks the authTag first. If even one bit of the encrypted string was altered in the database, the wax seal breaks. The decryption instantly rejects it and throws an error, protecting your system from tampered data.
+At the end of the function, we return:
+${iv.toString('hex')}:${authTag}:${encrypted}
+We do this because the decryption machine (decipher) needs all three pieces to open the box later. By joining them into one string with colons, we only need a single github_access_token column in our Neon database, rather than making three separate columns for the IV, the Tag, and the Token.
+
+******************************************
+everything we do in auth service layer=>
+When we hit https://api.github.com/user to fetch their profile, GitHub's API strictly requires the Authorization header to be formatted as Bearer <token>.
+
+dw thinking we are handling res in service layer , that res is due to axios ,  not express.
+
+he code is a temporary, one-time-use password generated by GitHub.
+When the user clicks "Authorize Shipnode," GitHub doesn't want to send their highly sensitive Access Token directly through the browser URL (because URLs are saved in browser history and can be stolen).
+Instead, GitHub sends a useless, expiring code to the browser. Your backend grabs that code, goes out the back door (server-to-server), and says to GitHub: "Here is the secret code, give me the real token." It’s a security measure called the "Authorization Code Flow."
+
+eq(users.age, 25) compiles to WHERE age = 25
+gt(users.age, 18) compiles to WHERE age > 18
+like(users.name, "%john%") compiles to WHERE name LIKE '%john%'
+
+const databaseResults = [
+  { name: "Alice" },  // Index 0
+  { name: "Bob" },    // Index 1
+  { name: "Charlie" } // Index 2
+];
+
+const [user] = databaseResults;
+console.log(user); 
+// Output: { name: "Alice" }
+// Bob and Charlie are completely ignored and thrown away.
+If you actually wanted Bob too, you would have to write:
+const [user1, user2] = databaseResults;
+
+this is called arr destructuring.

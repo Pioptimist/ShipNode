@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { githubCallback, githubLogin } from "../controllers/authController.js";
+import { getMe, githubCallback, githubLogin } from "../controllers/authController.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = Router();
 
@@ -9,4 +10,5 @@ router.get("/github", githubLogin);
 // Route: GET /api/auth/github/callback
 router.get("/github/callback", githubCallback);
 
+router.get("/me", protect, getMe);
 export default router;

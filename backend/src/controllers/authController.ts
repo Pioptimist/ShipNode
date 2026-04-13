@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as authService from "../services/authService.js";
 import { ENV } from "../lib/env.js";
+import { AuthRequest } from "../middleware/authMiddleware.js";
 
 export const githubLogin = (req: Request, res: Response) => {
 
@@ -41,5 +42,19 @@ export const githubCallback = async (req: Request, res: Response) => {
     
     console.error("Callback Server Error:", error);
     return res.redirect(`${ENV.FRONTEND_URL}/login?error=server_error`);
+  }
+};
+
+export const getMe = async (req: AuthRequest, res: Response) => {
+  try {
+    
+    return res.status(200).json({
+      success: true,
+      data: req.user,
+    });
+
+  } catch (error) {
+    console.error("fetching user Error:", error);
+    return res.status(500).json({ message: "Server error fetching profile." });
   }
 };

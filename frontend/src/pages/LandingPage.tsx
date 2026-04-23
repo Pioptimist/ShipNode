@@ -10,7 +10,7 @@ import NavBar from '../components/Navbar'
 import { FooterSection } from '../components/landing/FooterSection'
 export default function Page() {
   return (
-    <div className="min-h-screen dot-grid-bg">
+    <div className="min-h-screen bg-background">
       <NavBar />
       <main>
         <Hero/>

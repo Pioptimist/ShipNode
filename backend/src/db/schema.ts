@@ -20,11 +20,14 @@ export const projects = pgTable("projects", {
   customDomain: varchar("custom_domain", { length: 255 }).unique(), 
   domainVerified: boolean("domain_verified").default(false), // Prevents hijacking
   
+  domainVerificationToken: varchar("domain_verification_token", { length: 255 }),
   // The Instant Rollback Pointer (Which deployment is currently live?)
   activeDeploymentId: integer("active_deployment_id"), // Can be null when project is first created
   
   // Build Config
   repoName: varchar("repo_name", { length: 255 }).notNull(), 
+  // Add this to your projects schema
+  rootDirectory: varchar("root_directory", { length: 255 }).default("/"),
   framework: varchar("framework", { length: 50 }).default("VITE"), 
   installCommand: varchar("install_command", { length: 255 }).default("npm install"),
   buildCommand: varchar("build_command", { length: 255 }).default("npm run build"),
@@ -82,5 +85,6 @@ export const projectEnvs = pgTable("project_envs", {
   projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull(),
   key: varchar("key", { length: 255 }).notNull(), // e.g., "DATABASE_URL"
   value: text("value").notNull(), // AES-256 encrypted string
+  target: varchar("target", { length: 50 }).default("ALL"), // 'PRODUCTION', 'PREVIEW', 'ALL'
   createdAt: timestamp("created_at").defaultNow(),
 });

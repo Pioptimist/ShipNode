@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import * as authService from "../services/authService.js";
-import { ENV } from "../lib/env.js";
+import { ENV } from "../../lib/env.js";
 import { AuthRequest } from "../middleware/authMiddleware.js";
+import jwt from "jsonwebtoken";
+import { generateAccessToken } from "../../utils/jwt.js";
 
 export const githubLogin = (req: Request, res: Response) => {
 
@@ -56,5 +58,45 @@ export const getMe = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error("fetching user Error:", error);
     return res.status(500).json({ message: "Server error fetching profile." });
+  }
+};
+
+export const refreshAccessToken = (req: Request, res: Response) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) {
+      return res.status(401).json({
+        message: "Session expired. Please log in again.",
+      });
+    }
+
+    // Verify refresh token
+    const decoded = jwt.verify(
+      refreshToken,
+      ENV.REFRESH_SECRET
+    ) as { userId: number };
+    
+    // Generate new access token using the correct userId property
+    const newAccessToken = generateAccessToken(decoded.userId);
+
+    res.cookie("accessToken", newAccessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 15 * 60 * 1000, // 15 min to match generateAccessToken
+    });
+
+    return res.status(200).json({
+      message: "Access token refreshed",
+    });
+
+  } catch (error) {
+    // Invalid / expired refresh token
+    res.clearCookie("accessToken", { secure: true, sameSite: "none", httpOnly: true });
+    res.clearCookie("refreshToken", { secure: true, sameSite: "none", httpOnly: true });
+    console.error("Refresh token error:", error);
+    return res.status(401).json({
+      message: "Session expired. Please log in again.", 
+    });
   }
 };

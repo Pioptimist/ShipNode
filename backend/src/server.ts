@@ -4,8 +4,10 @@ import cookieParser from "cookie-parser";
 // (Note: In Node ES Modules, we import the .js extension even though the file is .ts)
 import { ENV } from "./lib/env.js";
 import { db } from "./db/index.js";
-import authRoutes from "./routes/authRoutes.js";
-
+import authRoutes from "./api/routes/authRoutes.js";
+import githubRoutes from "./api/routes/githubRoutes.js";
+import projectRoutes from "./api/routes/projectRoutes.js";
+import webhookRoutes from "./api/routes/webhookRoutes.js";
 const app = express();
 
 app.use(
@@ -17,6 +19,13 @@ app.use(
   })
 );
 
+// Capture raw body for GitHub webhooks BEFORE the general JSON parser
+app.use("/api/webhooks/github", express.json({
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf; // Store the exact raw buffer GitHub sent
+  }
+}));
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -26,6 +35,9 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/github", githubRoutes);
+app.use("/api/projects", projectRoutes);
+app.use("/api/webhooks", webhookRoutes);
 
 const startServer = async () => {
   try {

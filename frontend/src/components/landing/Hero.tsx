@@ -1,15 +1,16 @@
 "use client"
 
 import { WorkflowDiagram } from "../workflow-diagram"
-import { ArrowRight } from "lucide-react"
 import { motion } from "framer-motion"
 
 const ease = [0.22, 1, 0.36, 1] as const
 
 const Hero = () => {
   return (
-    <section className="relative w-full px-12 pt-6 pb-12 lg:px-24 lg:pt-10 lg:pb-16">
-      <div className="flex flex-col items-center text-center">
+    <section className="relative w-full px-12 pt-32 pb-12 lg:px-24 lg:pt-40 lg:pb-16 dot-grid-bg">
+      {/* Soft gradient mask to blend into the background below */}
+      <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-background to-transparent pointer-events-none" />
+      <div className="flex flex-col items-center text-center relative z-10">
         {/* Top headline: DEPLOY. SCALE. -- Geist Pixel Grid */}
         <motion.h1
           initial={{ opacity: 0, y: 30, filter: "blur(8px)" }}
@@ -50,29 +51,6 @@ const Hero = () => {
         >
           SYS.INT is the deterministic deployment layer between your models and your users. Sub-5ms inference. Global edge routing. Full operational control.
         </motion.p>
-
-        {/* CTA Button */}
-        <motion.button
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.6, ease }}
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-          className="group flex items-center gap-0 bg-foreground text-background text-sm font-mono tracking-wider uppercase"
-        >
-          <span className="flex items-center justify-center w-10 h-10 bg-[#ea580c]">
-            <motion.span
-              className="inline-flex"
-              whileHover={{ x: 3 }}
-              transition={{ type: "spring", stiffness: 400, damping: 20 }}
-            >
-              <ArrowRight size={16} strokeWidth={2} className="text-background" />
-            </motion.span>
-          </span>
-          <span className="px-5 py-2.5">
-            Request a Demo
-          </span>
-        </motion.button>
       </div>
     </section>
   )

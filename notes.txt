@@ -98,6 +98,55 @@ The Concept: It is a burst of random data mixed into the encryption process.
 Why we need it: Imagine two users have the exact same GitHub token. If we didn't use an iv, both users would have the exact same encrypted string in the database. A hacker could notice this pattern. By injecting a random iv every single time, the same token will output a completely different encrypted string every time you run it.
 
 cipher.update(text, 'utf8', 'hex'): This translates to: "Take my plain text (utf8), push it through the encryption grinder, and spit the scrambled chunks out as hex."
+
+******************************************************
+WHAT WE HAVE BUILT SO FAR (API / Control Plane)
+
+1. Auth System (`authRoutes.ts`, `authController.ts`, `authService.ts`, `authMiddleware.ts`, `jwt.ts`)
+- GitHub OAuth Flow: Redirects user to GitHub, catches the callback code, and securely exchanges it for a raw GitHub token.
+- Encryption Vault: Encrypts the raw GitHub token using `crypto` AES-256-GCM before saving it to the Neon DB so a database leak doesn't expose user repos.
+- Session Management: Issues `accessToken` (15m) and `refreshToken` (7d) as secure, httpOnly cookies. Includes a `/refresh` endpoint to silently renew sessions.
+- Middleware: The `protect` middleware strictly enforces access by decoding the JWT and fetching the user.
+
+2. Project & Webhook System (`projectRoutes.ts`, `githubController.ts`, `deploymentService.ts`)
+- Repository Fetching: Hits GitHub API with the decrypted token to list user repos, stripping out unnecessary metadata.
+- Project Creation: Saves a project to the Neon DB, generates a unique `.shipnode.app` subdomain, and generates a DNS verification token for future custom domains.
+- The Webhook Handshake: Programmatically attaches a GitHub Webhook to the user's repository so GitHub notifies Shipnode on every `git push`. Includes rollback logic to delete the project if the webhook fails to attach.
+- Webhook Reception & Security: Intercepts GitHub `push` events. Uses `express.json` to capture the exact raw buffer of the request, then uses `crypto.timingSafeEqual` and HMAC SHA-256 to cryptographically verify that the payload legitimately came from GitHub using our `GITHUB_WEBHOOK_SECRET`.
+- Deployment Queuing: Automatically searches for all Shipnode projects tied to the pushed repository and inserts a `QUEUED` deployment row into the database, tagging the exact `commitHash` and `branch`.
+
+******************************************************
+HOW WE PLAN TO BUILD THE REST (Worker & Edge Proxy)
+
+Right now we have the Control Plane. Next, we build the Data Plane (Worker) and Routing Plane (Proxy). To keep the architecture clean, we separate the `backend/src` into three distinct entry points: `api`, `worker`, and `proxy`.
+
+PHASE 1: The Build Worker (Data Plane)
+Goal: A sandboxed system to safely execute untrusted user code.
+- BullMQ: The API will push a job to a Redis queue. A standalone Node.js Worker process listens to this queue.
+- Dockerode (The Sandbox Factory): The Worker uses Node.js to spin up a disposable `ubuntu` Docker container on the VM for each job.
+- Variables & Execution: We inject the specific `commitHash`, `INSTALL_CMD`, `BUILD_CMD`, and encrypted `projectEnvs` into the container. The container runs `git clone`, checks out the exact commit, and builds the app.
+- Cloudflare R2 Uploads: The container takes the `OUTPUT_DIR` (e.g., `dist`) and uploads all static assets to an S3-compatible Cloudflare R2 bucket (`s3://shipnode-outputs/project_123/deploy_456`).
+- Live Logs: During the build, the container's `stdout` is captured and published to a Redis channel (`logs:deploy_456`).
+- Finalizing: The DB deployment status updates to `READY`, sets the `storagePath`, and updates the project's `activeDeploymentId`. Builds logs are saved to an S3 text file for future viewing.
+
+PHASE 2: Live Logs & Sockets (Connecting Worker to Frontend)
+Goal: Show real-time terminal output on the React frontend.
+- Redis Pub/Sub: The API server runs a Socket.io instance. When a React client views a deployment, they connect to the socket room `deploy_456`.
+- The API server subscribes to the Redis channel `logs:deploy_456`. As the isolated Docker worker publishes logs, the API instantly forwards them over WebSockets to the user.
+
+PHASE 3: The Edge Proxy & Routing
+Goal: Seamlessly serve the built React/Vite sites to users visiting custom domains or subdomains.
+- Reverse Proxy: A dedicated `http-proxy` server running on port 80/443 intercepts all traffic to `*.shipnode.app`.
+- DB Lookup: It extracts the `Host` header (e.g., `my-app.shipnode.app`), queries Neon for the `activeDeploymentId`, and finds the R2 bucket URL.
+- Streaming: It streams the exact `index.html` or asset from Cloudflare R2 back to the browser without changing the URL.
+- Custom Domains: If a user maps `www.their-startup.com` via CNAME, the proxy will check if `domainVerified` is true (by validating the user placed the `domainVerificationToken` in their DNS TXT records).
+- WAF & Analytics: Before serving a file, the proxy logs the hit to `requestLogs` (IP, path, response time) and blocks the IP if it exists in the `blockedIps` table.
+
+PHASE 4: Environment Variables Vault
+Goal: Secure process for `.env` files.
+- Users save env vars via the dashboard. These are AES-256 encrypted in the `projectEnvs` table.
+- When the Build Worker spins up the Docker container, it decrypts them in memory and passes them to the container via `dockerode`, ensuring tokens are never logged or stored in plain text at rest.
+
 cipher.final('hex'): This tells Node: "I'm done putting data into the grinder. Flush out whatever is left in the machine and close the lockbox." You add both parts together to get your final encrypted string
 
 What is the authTag?
@@ -137,3 +186,118 @@ If you actually wanted Bob too, you would have to write:
 const [user1, user2] = databaseResults;
 
 this is called arr destructuring.
+
+************************************************
+Here is the exact sequence of events we are building toward:
+The Login: User clicks "Log in with GitHub". We save their token.
+The Dashboard Load: React hits /api/github/repos. We return a list of 20 repos.
+
+The Configuration Screen: The user clicks "Import" on my-awesome-app.
+React opens a settings panel.
+The user types frontend into the Root Directory input.
+They select Vite as the framework.
+The Deployment Trigger: The user clicks "Deploy".
+NOW React sends the payload to our createProject API route.
+The backend saves the project (with rootDirectory: "frontend").
+The backend attaches the Webhook to GitHub.
+The Build Execution (The trick): When our Docker container clones the code, before it runs npm install, it looks at the database. Because rootDirectory is set to frontend, the Docker worker will literally run cd frontend before it starts building
+
+thats why we are building thr github fetch repo controller!
+
+****************************************************
+the whole flow :
+Stage 1: Setup (Frontend → API → GitHub)
+User selects repo (soumyodeep/ecommerce), sets Framework = Vite, Root Directory = frontend, clicks Deploy
+Frontend sends POST /api/projects
+createProject controller:
+Creates row in Neon projects table
+Stores: repoName, framework, rootDirectory
+Calls createGithubWebhook service:
+Decrypts GitHub token
+Registers webhook on repo
+GitHub will notify api.shipnode.com/webhooks/github on pushes
+
+Stage 2: Trigger (Developer → GitHub → API)
+User pushes code: git push origin main
+GitHub fires webhook payload to your API
+handleGithubWebhook controller:
+Verifies signature (security check)
+Extracts branch + commit hash
+Calls queueNewDeployment service:
+Finds project in DB
+Inserts new deployment with status = QUEUED
+
+Stage 3: Build Worker (Docker Execution Layer)
+Worker detects QUEUED deployment
+Updates status → BUILDING
+Spins up isolated Docker container
+Clones repo:
+git clone https://github.com/soumyodeep/ecommerce
+Reads project config from DB
+Detects rootDirectory = frontend
+Executes build inside folder:
+cd frontend
+Runs framework-specific build:
+npm install
+npm run build
+Vite generates /dist
+Uploads build to S3:
+s3://shipnode-storage/project_1/deployment_5/
+Destroys container
+Updates deployment → READY
+Updates project → activeDeploymentId = 5
+
+Stage 4: Delivery (User → Proxy → S3)
+User visits: soumyodeep-ecommerce.shipnode.app
+Request hits proxy (Caddy server)
+Proxy queries DB:
+Finds active deployment
+DB returns: activeDeploymentId = 5
+Proxy fetches files from S3 path
+Serves static site instantly
+
+**************************************
+If you look back at the createGithubWebhook function we discussed for Stage 1, we programmatically send this exact secret to GitHub when the user clicks "Deploy":
+
+// Inside createGithubWebhook...
+config: {
+  url: webhookUrl,
+  content_type: "json",
+  insecure_ssl: "0",
+  secret: ENV.GITHUB_WEBHOOK_SECRET // <-- GitHub saves this on their end!
+}
+Then, in Stage 2, when GitHub pings your webhook route, the verifyWebhookSignature service uses this exact same secret to check the math.
+*****************************************
+The Dashboard Load (getUserRepositories): The user logs in, and your frontend calls this. You use their decrypted token to ask GitHub for their repos, strip out the junk, and send a clean list to your React app.
+
+The "Deploy" Button (createProject): The user selects a repo and clicks deploy. You generate a custom subdomain, save the project to your database, and then pass the baton to the Service layer.
+
+The Handshake (createGithubWebhook): This service takes over, talks to GitHub, and says: "Send a POST request to our API whenever code is pushed."
+
+The Catcher's Mitt (verifyWebhookSignature & queueNewDeployment): These are waiting in the background. When GitHub eventually sends that POST request, these services will verify it isn't a hacker, and queue the build in the database.
+**************************************
+The Dilemma
+We need GitHub to send a webhook to our Shipnode backend so we know when to trigger the Docker build.
+But our Shipnode backend is currently running on localhost:3031 on your laptop.
+We just established that GitHub (on the public street) cannot reach localhost (your private room).
+So, how do we test our CI/CD pipeline without deploying our unfinished, buggy backend to an AWS VM every five minutes?
+
+Ngrok 
+Ngrok is a developer tool that solves this exact problem. It acts as a magic P.O. Box on the public street.
+When you run the command ngrok http 3031 on your laptop, ngrok does two things:
+It creates a temporary, public URL on the real internet (e.g., https://a1b2-34-56-78.ngrok-free.app).
+It drills a secure, temporary tunnel straight through your Wi-Fi router's firewall, directly connecting that public URL to your localhost:3031.
+The Master Plan for Shipnode
+Here is exactly how we are going to use this to build the CI/CD pipeline smoothly:
+
+You start your Node backend on localhost:3031.
+You open a second terminal and start ngrok. Ngrok says: "Your public URL is https://magic-tunnel.ngrok.app".
+We log into our Shipnode React dashboard and click "Deploy Project".
+
+Our backend takes that magic-tunnel URL and gives it to GitHub.
+
+You type git push on a test repository.
+
+The Flow: GitHub sees the push -> GitHub sends the JSON payload to https://magic-tunnel.ngrok.app -> Ngrok catches it on the public internet -> Ngrok shoots it down the tunnel directly into your laptop -> Your Express route (/api/webhooks/github) catches it and updates your Neon database!
+
+******************************************************

@@ -1,10 +1,10 @@
 import axios from "axios";
 import { eq } from "drizzle-orm";
-import { db } from "../db/index.js";
-import { users } from "../db/schema.js";
-import { encryptToken } from "../utils/crypto.js";
-import { ENV } from "../lib/env.js";
-import { generateAccessToken, generateRefreshToken } from "../utils/jwt.js";
+import { db } from "../../db/index.js";
+import { users } from "../../db/schema.js";
+import { encryptToken } from "../../utils/crypto.js";
+import { ENV } from "../../lib/env.js";
+import { generateAccessToken, generateRefreshToken } from "../../utils/jwt.js";
 
 
 export const getGithubAuthUrl = (): string => {

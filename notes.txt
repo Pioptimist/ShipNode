@@ -99,53 +99,6 @@ Why we need it: Imagine two users have the exact same GitHub token. If we didn't
 
 cipher.update(text, 'utf8', 'hex'): This translates to: "Take my plain text (utf8), push it through the encryption grinder, and spit the scrambled chunks out as hex."
 
-******************************************************
-WHAT WE HAVE BUILT SO FAR (API / Control Plane)
-
-1. Auth System (`authRoutes.ts`, `authController.ts`, `authService.ts`, `authMiddleware.ts`, `jwt.ts`)
-- GitHub OAuth Flow: Redirects user to GitHub, catches the callback code, and securely exchanges it for a raw GitHub token.
-- Encryption Vault: Encrypts the raw GitHub token using `crypto` AES-256-GCM before saving it to the Neon DB so a database leak doesn't expose user repos.
-- Session Management: Issues `accessToken` (15m) and `refreshToken` (7d) as secure, httpOnly cookies. Includes a `/refresh` endpoint to silently renew sessions.
-- Middleware: The `protect` middleware strictly enforces access by decoding the JWT and fetching the user.
-
-2. Project & Webhook System (`projectRoutes.ts`, `githubController.ts`, `deploymentService.ts`)
-- Repository Fetching: Hits GitHub API with the decrypted token to list user repos, stripping out unnecessary metadata.
-- Project Creation: Saves a project to the Neon DB, generates a unique `.shipnode.app` subdomain, and generates a DNS verification token for future custom domains.
-- The Webhook Handshake: Programmatically attaches a GitHub Webhook to the user's repository so GitHub notifies Shipnode on every `git push`. Includes rollback logic to delete the project if the webhook fails to attach.
-- Webhook Reception & Security: Intercepts GitHub `push` events. Uses `express.json` to capture the exact raw buffer of the request, then uses `crypto.timingSafeEqual` and HMAC SHA-256 to cryptographically verify that the payload legitimately came from GitHub using our `GITHUB_WEBHOOK_SECRET`.
-- Deployment Queuing: Automatically searches for all Shipnode projects tied to the pushed repository and inserts a `QUEUED` deployment row into the database, tagging the exact `commitHash` and `branch`.
-
-******************************************************
-HOW WE PLAN TO BUILD THE REST (Worker & Edge Proxy)
-
-Right now we have the Control Plane. Next, we build the Data Plane (Worker) and Routing Plane (Proxy). To keep the architecture clean, we separate the `backend/src` into three distinct entry points: `api`, `worker`, and `proxy`.
-
-PHASE 1: The Build Worker (Data Plane)
-Goal: A sandboxed system to safely execute untrusted user code.
-- BullMQ: The API will push a job to a Redis queue. A standalone Node.js Worker process listens to this queue.
-- Dockerode (The Sandbox Factory): The Worker uses Node.js to spin up a disposable `ubuntu` Docker container on the VM for each job.
-- Variables & Execution: We inject the specific `commitHash`, `INSTALL_CMD`, `BUILD_CMD`, and encrypted `projectEnvs` into the container. The container runs `git clone`, checks out the exact commit, and builds the app.
-- Cloudflare R2 Uploads: The container takes the `OUTPUT_DIR` (e.g., `dist`) and uploads all static assets to an S3-compatible Cloudflare R2 bucket (`s3://shipnode-outputs/project_123/deploy_456`).
-- Live Logs: During the build, the container's `stdout` is captured and published to a Redis channel (`logs:deploy_456`).
-- Finalizing: The DB deployment status updates to `READY`, sets the `storagePath`, and updates the project's `activeDeploymentId`. Builds logs are saved to an S3 text file for future viewing.
-
-PHASE 2: Live Logs & Sockets (Connecting Worker to Frontend)
-Goal: Show real-time terminal output on the React frontend.
-- Redis Pub/Sub: The API server runs a Socket.io instance. When a React client views a deployment, they connect to the socket room `deploy_456`.
-- The API server subscribes to the Redis channel `logs:deploy_456`. As the isolated Docker worker publishes logs, the API instantly forwards them over WebSockets to the user.
-
-PHASE 3: The Edge Proxy & Routing
-Goal: Seamlessly serve the built React/Vite sites to users visiting custom domains or subdomains.
-- Reverse Proxy: A dedicated `http-proxy` server running on port 80/443 intercepts all traffic to `*.shipnode.app`.
-- DB Lookup: It extracts the `Host` header (e.g., `my-app.shipnode.app`), queries Neon for the `activeDeploymentId`, and finds the R2 bucket URL.
-- Streaming: It streams the exact `index.html` or asset from Cloudflare R2 back to the browser without changing the URL.
-- Custom Domains: If a user maps `www.their-startup.com` via CNAME, the proxy will check if `domainVerified` is true (by validating the user placed the `domainVerificationToken` in their DNS TXT records).
-- WAF & Analytics: Before serving a file, the proxy logs the hit to `requestLogs` (IP, path, response time) and blocks the IP if it exists in the `blockedIps` table.
-
-PHASE 4: Environment Variables Vault
-Goal: Secure process for `.env` files.
-- Users save env vars via the dashboard. These are AES-256 encrypted in the `projectEnvs` table.
-- When the Build Worker spins up the Docker container, it decrypts them in memory and passes them to the container via `dockerode`, ensuring tokens are never logged or stored in plain text at rest.
 
 cipher.final('hex'): This tells Node: "I'm done putting data into the grinder. Flush out whatever is left in the machine and close the lockbox." You add both parts together to get your final encrypted string
 
@@ -187,74 +140,6 @@ const [user1, user2] = databaseResults;
 
 this is called arr destructuring.
 
-************************************************
-Here is the exact sequence of events we are building toward:
-The Login: User clicks "Log in with GitHub". We save their token.
-The Dashboard Load: React hits /api/github/repos. We return a list of 20 repos.
-
-The Configuration Screen: The user clicks "Import" on my-awesome-app.
-React opens a settings panel.
-The user types frontend into the Root Directory input.
-They select Vite as the framework.
-The Deployment Trigger: The user clicks "Deploy".
-NOW React sends the payload to our createProject API route.
-The backend saves the project (with rootDirectory: "frontend").
-The backend attaches the Webhook to GitHub.
-The Build Execution (The trick): When our Docker container clones the code, before it runs npm install, it looks at the database. Because rootDirectory is set to frontend, the Docker worker will literally run cd frontend before it starts building
-
-thats why we are building thr github fetch repo controller!
-
-****************************************************
-the whole flow :
-Stage 1: Setup (Frontend → API → GitHub)
-User selects repo (soumyodeep/ecommerce), sets Framework = Vite, Root Directory = frontend, clicks Deploy
-Frontend sends POST /api/projects
-createProject controller:
-Creates row in Neon projects table
-Stores: repoName, framework, rootDirectory
-Calls createGithubWebhook service:
-Decrypts GitHub token
-Registers webhook on repo
-GitHub will notify api.shipnode.com/webhooks/github on pushes
-
-Stage 2: Trigger (Developer → GitHub → API)
-User pushes code: git push origin main
-GitHub fires webhook payload to your API
-handleGithubWebhook controller:
-Verifies signature (security check)
-Extracts branch + commit hash
-Calls queueNewDeployment service:
-Finds project in DB
-Inserts new deployment with status = QUEUED
-
-Stage 3: Build Worker (Docker Execution Layer)
-Worker detects QUEUED deployment
-Updates status → BUILDING
-Spins up isolated Docker container
-Clones repo:
-git clone https://github.com/soumyodeep/ecommerce
-Reads project config from DB
-Detects rootDirectory = frontend
-Executes build inside folder:
-cd frontend
-Runs framework-specific build:
-npm install
-npm run build
-Vite generates /dist
-Uploads build to S3:
-s3://shipnode-storage/project_1/deployment_5/
-Destroys container
-Updates deployment → READY
-Updates project → activeDeploymentId = 5
-
-Stage 4: Delivery (User → Proxy → S3)
-User visits: soumyodeep-ecommerce.shipnode.app
-Request hits proxy (Caddy server)
-Proxy queries DB:
-Finds active deployment
-DB returns: activeDeploymentId = 5
-Proxy fetches files from S3 path
-Serves static site instantly
 
 **************************************
 If you look back at the createGithubWebhook function we discussed for Stage 1, we programmatically send this exact secret to GitHub when the user clicks "Deploy":
@@ -301,3 +186,175 @@ You type git push on a test repository.
 The Flow: GitHub sees the push -> GitHub sends the JSON payload to https://magic-tunnel.ngrok.app -> Ngrok catches it on the public internet -> Ngrok shoots it down the tunnel directly into your laptop -> Your Express route (/api/webhooks/github) catches it and updates your Neon database!
 
 ******************************************************
+
+WHAT WE HAVE BUILT SO FAR (API / Control Plane)
+
+1. Auth System (`authRoutes.ts`, `authController.ts`, `authService.ts`, `authMiddleware.ts`, `jwt.ts`)
+- GitHub OAuth Flow: Redirects user to GitHub, catches the callback code, and securely exchanges it for a raw GitHub token.
+- Encryption Vault: Encrypts the raw GitHub token using `crypto` AES-256-GCM before saving it to the Neon DB so a database leak doesn't expose user repos.
+- Session Management: Issues `accessToken` (15m) and `refreshToken` (7d) as secure, httpOnly cookies. Includes a `/refresh` endpoint to silently renew sessions.
+- Middleware: The `protect` middleware strictly enforces access by decoding the JWT and fetching the user.
+
+2. Project & Webhook System (`projectRoutes.ts`, `githubController.ts`, `deploymentService.ts`)
+- Repository Fetching: Hits GitHub API with the decrypted token to list user repos, stripping out unnecessary metadata.
+- Project Creation: Saves a project to the Neon DB, generates a unique `.shipnode.app` subdomain, and generates a DNS verification token for future custom domains.
+- The Webhook Handshake: Programmatically attaches a GitHub Webhook to the user's repository so GitHub notifies Shipnode on every `git push`. Includes rollback logic to delete the project if the webhook fails to attach.
+- Webhook Reception & Security: Intercepts GitHub `push` events. Uses `express.json` to capture the exact raw buffer of the request, then uses `crypto.timingSafeEqual` and HMAC SHA-256 to cryptographically verify that the payload legitimately came from GitHub using our `GITHUB_WEBHOOK_SECRET`.
+- Deployment Queuing: Automatically searches for all Shipnode projects tied to the pushed repository and inserts a `QUEUED` deployment row into the database, tagging the exact `commitHash` and `branch`.
+
+******************************************************
+HOW WE PLAN TO BUILD THE REST (Worker & Edge Proxy)
+
+Right now we have the Control Plane. Next, we build the Data Plane (Worker) and Routing Plane (Proxy). To keep the architecture clean, we separate the `backend/src` into three distinct entry points: `api`, `worker`, and `proxy`.
+
+PHASE 1: The Build Worker (Data Plane)
+Goal: A sandboxed system to safely execute untrusted user code.
+- BullMQ: The API will push a job to a Redis queue. A standalone Node.js Worker process listens to this queue.
+- Dockerode (The Sandbox Factory): The Worker uses Node.js to spin up a disposable `ubuntu` Docker container on the VM for each job.
+- Variables & Execution: We inject the specific `commitHash`, `INSTALL_CMD`, `BUILD_CMD`, and encrypted `projectEnvs` into the container. The container runs `git clone`, checks out the exact commit, and builds the app.
+- Cloudflare R2 Uploads: The container takes the `OUTPUT_DIR` (e.g., `dist`) and uploads all static assets to an S3-compatible Cloudflare R2 bucket (`s3://shipnode-outputs/project_123/deploy_456`).
+- Live Logs: During the build, the container's `stdout` is captured and published to a Redis channel (`logs:deploy_456`).
+- Finalizing: The DB deployment status updates to `READY`, sets the `storagePath`, and updates the project's `activeDeploymentId`. Builds logs are saved to an S3 text file for future viewing.
+
+PHASE 2: Live Logs & Sockets (Connecting Worker to Frontend)
+Goal: Show real-time terminal output on the React frontend.
+- Redis Pub/Sub: The API server runs a Socket.io instance. When a React client views a deployment, they connect to the socket room `deploy_456`.
+- The API server subscribes to the Redis channel `logs:deploy_456`. As the isolated Docker worker publishes logs, the API instantly forwards them over WebSockets to the user.
+
+PHASE 3: The Edge Proxy & Routing
+Goal: Seamlessly serve the built React/Vite sites to users visiting custom domains or subdomains.
+- Reverse Proxy: A dedicated `http-proxy` server running on port 80/443 intercepts all traffic to `*.shipnode.app`.
+- DB Lookup: It extracts the `Host` header (e.g., `my-app.shipnode.app`), queries Neon for the `activeDeploymentId`, and finds the R2 bucket URL.
+- Streaming: It streams the exact `index.html` or asset from Cloudflare R2 back to the browser without changing the URL.
+- Custom Domains: If a user maps `www.their-startup.com` via CNAME, the proxy will check if `domainVerified` is true (by validating the user placed the `domainVerificationToken` in their DNS TXT records).
+- WAF & Analytics: Before serving a file, the proxy logs the hit to `requestLogs` (IP, path, response time) and blocks the IP if it exists in the `blockedIps` table.
+
+PHASE 4: Environment Variables Vault
+Goal: Secure process for `.env` files.
+- Users save env vars via the dashboard. These are AES-256 encrypted in the `projectEnvs` table.
+- When the Build Worker spins up the Docker container, it decrypts them in memory and passes them to the container via `dockerode`, ensuring tokens are never logged or stored in plain text at rest.
+*********************************************************
+What is an Image? (The Blueprint)
+A Docker Image is basically a frozen, read-only snapshot of a mini-computer.
+Imagine taking a brand-new laptop, installing Ubuntu Linux on it, installing Node.js, downloading Git, and then hitting Pause. You shrink wrap that entire laptop into a file. That file is the Image.
+
+Why do we build it?
+If we didn't build an image, every time a user clicked "Deploy", our backend would have to spin up a new virtual machine, spend 3 minutes downloading Linux, 2 minutes installing Node.js, etc. Instead, we do all that heavy lifting once, save the Image (which we called shipnode-builder), and stick it in our server's storage. Now, when a user deploys, we just say: "Hey Docker, load up shipnode-builder!" and it boots up instantly.
+
+2. What is a Container? (The Live Sandbox)
+When you type docker run shipnode-builder, Docker takes that frozen Image, copies it, unpauses it, and turns it into a living, breathing mini-computer called a Container.
+
+This container thinks it is completely alone in the world. It doesn't know about your host VM's database, your Express server, or the Internet (unless we let it).
+If a hacker writes rm -rf / (delete everything) in their React app's npm run build script, it only deletes the files inside this temporary Container. Your main VM is completely safe.
+When the build finishes, the Container dies and vanishes forever. The Image remains perfectly untouched, ready for the next deployment.
+3. The Dockerfile Syntax (How we make the Blueprint)
+A Dockerfile is just a list of instructions telling Docker how to build the frozen Image step-by-step.
+
+FROM ubuntu:focal: Start with a barebones, official Ubuntu Linux image downloaded from the internet.
+RUN apt-get install nodejs: Literally "type this command into the terminal of this mini-computer while you are building it."
+WORKDIR /home/app: "Create this folder and pretend you are cd'd into it."
+COPY main.sh main.sh: "Take the main.sh file from my real computer (my code editor) and copy it into the mini-computer."
+ENTRYPOINT [ "/home/app/main.sh" ]: "Whenever someone turns this Image into a living Container, this is the very first command you should execute automatically."
+4. What is the Shell Script (main.sh) for?
+A .sh file (Shell Script) is just a list of terminal commands. You could technically type all these out manually, but saving them in a script lets Docker run them automatically.
+
+Why do we need it? Because our generic Docker Image doesn't know what app it is supposed to build.
+When our Node.js Worker (which we will build next) decides to spin up a Container, it uses environment variables to pass secret messages to the container, like sliding a piece of paper under a door.
+
+Our Node API says: "Docker, start a container. But before you do, silently set REPO_URL to https://github.com/react-app!"
+
+Then, the Container wakes up. It immediately runs main.sh (because of our ENTRYPOINT). The script looks at the variables that were slipped under the door, runs git clone $REPO_URL, and then runs eval $BUILD_CMD (which might equal npm run build).
+
+*********************************************************
+
+Q1: Why do we have two different 'package.json' files? Won't they conflict?
+A: They will NEVER conflict because they exist in two completely different universes. 
+- Your main `backend/package.json` lives on your HOST machine (your laptop/VM). It installs Express, Drizzle, Dockerode, etc.
+- The `backend/base-image/package.json` ONLY exists inside the Docker Container. When we ran `docker build`, Docker copied that tiny package.json inside the isolated Ubuntu sandbox and ran `npm install` internally. The container has no idea your main backend even exists!
+
+Q2: How does the container get the secret passwords (R2 keys) if we don't copy the '.env' file?
+A: Copying `.env` files into a Docker image is a huge security risk. Instead, we use "Environment Injection".
+When your Node.js API (on the host) starts the container using `dockerode`, it passes an array of variables:
+`Env: ["R2_ENDPOINT=https...", "PROJECT_ID=123"]`
+Docker takes those and injects them directly into the Linux Operating System's memory for that specific container. When `upload.js` runs, Node automatically reads them from memory using `process.env.R2_ENDPOINT`.
+
+Q3: Why are we using Redis here? What's the difference between Redis Pub/Sub and Socket.io?
+A: Think of Socket.io as a "Telephone Call" and Redis Pub/Sub as a "Radio Broadcast".
+- Socket.io (Telephone): Used for communication across the internet (Server <--> Browser).
+- Redis (Radio): Used for internal communication on your server (Docker Container <--> Express Server).
+Because the Docker Container is a locked sandbox, it cannot easily use Socket.io to talk to the browser. 
+Instead, the container acts like a radio DJ: `publisher.publish('logs:123', 'Uploading file...')`. It yells into the void. 
+Your Express Server acts like a radio listener: `redis.subscribe('logs:123')`. 
+When the Express server hears the radio broadcast, it picks up the Telephone (Socket.io) and tells the User's Browser exactly what it heard!
+
+Q4: Step-by-Step Breakdown of `upload.js` (Besides the R2 Setup)
+1. Finding the Files (`path.join`):
+   The script uses `path.join(__dirname, "workspace", rootDir, OUTPUT_DIR)`.
+   This translates to: "Go to the folder this script is in, go into the 'workspace' folder (where bash cloned the repo), go into the user's specific 'rootDir' folder, and find the 'dist' (or 'build') folder."
+2. Sweeping the Files (`fs.readdirSync`):
+   It uses `{ recursive: true }` to scan everything. If it didn't do this, it would only find top-level files (like index.html) but miss files buried in folders (like `assets/images/logo.png`).
+3. The MIME Type Check (`mime.lookup`):
+   R2/S3 is basically a dumb filing cabinet. If you upload a `.css` file without the `ContentType: text/css` label, R2 sends it back to the browser as plain text, and the user's website styling will be completely broken! `mime-types` automatically detects the right label based on the file extension.
+4. The Upload (`s3Client.send`):
+   It converts the file on the hard drive into a readable stream (`fs.createReadStream`) and pipes it up to the R2 bucket under a perfectly organized path: `outputs/project_1/deploy_5/index.html`.
+
+Q5: Wait, the user won't give us the location of `dist`! How do we know what folder to upload?
+A: You are absolutely right, that is literally how Vercel works! Vercel handles this automatically, and our worker will too.
+When Vercel builds a project, it looks at the framework (Vite uses `dist`, Create-React-App uses `build`, Next.js uses `.next`).
+If an `OUTPUT_DIR` isn't explicitly provided by the user in their project settings, our `upload.js` script will run a fallback detection array after `npm run build` finishes:
+`const possibleDirs = ['dist', 'build', 'out', '.next', 'public'];`
+It will loop through these and pick the first one that actually exists on the disk. If a framework creates a `dist` folder, we find it instantly and shoot it up to R2!
+
+Q6: Won't the `package.json` inside the `base-image` folder conflict with the main backend `package.json` when we are writing code?
+A: No! Node and npm are designed to be "folder-scoped". When you run `npm install` or write code in the `backend/` root, it only reads `backend/package.json`. It completely ignores any `package.json` hidden down inside `backend/base-image/`. They are two completely separate, independent Node.js projects that just happen to live in the same repository.
+
+Q7: Docker doesn't magically know about `upload.js` or `package.json`. How does it actually fetch them and get them inside the VM?
+A: It doesn't fetch them from the internet! It literally copies them directly from your Windows hard drive into the VM *during the build process*.
+When you typed `docker build -t shipnode-builder .` in the terminal, the `.` at the end told Docker: "Look at the exact folder I am currently in (`e:\Vercel\backend\base-image`)."
+Inside your `Dockerfile`, when we wrote the lines:
+`COPY package.json .`
+`COPY upload.js upload.js`
+Docker acted like a person hitting "Ctrl+C" on your Windows `upload.js` file and hitting "Ctrl+V" inside the isolated Linux VM's `/home/app` folder. The files get **permanently baked inside** the image container right then and there! By the time you run the container, the files are already sitting on the VM's hard drive.
+
+Q8: So essentially to run this docker, I would need to run it from the `base-image` folder right?
+A: No! You only need to be in the `base-image` folder to **BUILD** the image (`docker build`). Once the image is successfully built and named `shipnode-builder`, it is saved securely inside your computer's "Docker Engine" (like an installed app). 
+Once it's built, you can **RUN** the container from literally anywhere on your computer. In fact, our Node.js Worker (`src/worker/index.ts`) will be running from the `backend/` folder, and it will just tell the Docker Engine: "Hey, run that `shipnode-builder` image you saved earlier." The Docker Engine handles the rest.
+
+Q9: Say everything is done and working locally. What would I need to do in my production VM (like AWS EC2 or DigitalOcean) to run this backend properly?
+A: To host this full architecture in a live production VM, you'll need the following installed on that server:
+1. **Node.js & npm:** To run both your `api` server and your `worker` server.
+2. **Docker Engine Installed:** Your server MUST have Docker installed so your Node.js Worker (`dockerode`) can actively spawn the sandboxes.
+3. **Build the Sandbox Once:** Before starting your worker, you will SSH into the VM, `cd` into `backend/base-image`, and run `docker build -t shipnode-builder .` exactly once. So the VM's Docker Engine has the blueprint ready.
+4. **Redis:** A Redis instance running on the VM (or managed via Upstash/Aiven) for the BullMQ queue and the live Socket.io logs.
+5. **PostgreSQL:** For your database.
+6. **PM2 (Process Manager):** You will use PM2 to keep two separate Node processes running 24/7 in the background:
+   - `pm2 start dist/api/server.js --name "shipnode-api"` (Listens on port 3000)
+   - `pm2 start dist/worker/index.js --name "shipnode-worker"` (Listens to the Redis queue & runs Docker)
+7. **.env File:** You'll paste all your Cloudflare R2 keys, GitHub Webhook secrets, and Database URLs into the `.env` file on that server.
+
+Once that is set up, your API listens over the internet, throws deployment jobs to Redis, the Worker picks them up, spawns the Docker sandbox, uploads to R2, and streams the logs right back to the API!
+
+Q10: What does the `.` at the end of `docker build -t shipnode-builder .` mean?
+A: In Docker, the `.` simply means "the current directory you are sitting in inside the terminal." 
+When you run `docker build`, Docker needs to know exactly where to find the `Dockerfile` and all the files you want to `COPY` into the image (like `package.json` and `upload.js`). By putting the `.`, you are telling Docker Engine: "Look in the folder I am currently running this command from, read the Dockerfile here, grab these files, and bake everything into an image named `shipnode-builder`." If you forgot the `.`, the command would fail because Docker wouldn't know where to look!
+
+
+***************************************
+docker run -e REPO_URL="https://github.com/Pioptimist/My-portfolioo" -e COMMIT_HASH="main" -e ROOT_DIR="/" -e INSTALL_CMD="npm install" -e BUILD_CMD="npm run build" -e PROJECT_ID="test_proj_01" -e DEPLOYMENT_ID="test_dep_01" -e REDIS_URL="redis://host.docker.internal:6379" -e R2_ENDPOINT="https://0a7e499be37dae5e07d73e185842344d.r2.cloudflarestorage.com" -e R2_ACCESS_KEY_ID="812baa8aa7b3821f2e5d319e57d8a6ae" -e R2_SECRET_ACCESS_KEY="97935c8b2bd1a217b7c1d26fd11fab9bde2058edb702bedbb50074628e2127b3" -e R2_BUCKET_NAME="shipnode-projects" shipnode-builder
+
+command to check docker file i just created.
+**************************************************
+
+Q11: I went to my Cloudflare R2 public URL to view the `index.html` file we just deployed. It's a completely blank page, and the console says 404 Not Found for `assets/index.js` and `assets/index.css`! Did a piece break?
+A: No! Your Docker image worked flawlessly. It extracted the files perfectly and uploaded them perfectly. 
+The reason you got a blank page is the exact reason why Vercel uses "Reverse Proxies" (our upcoming `src/proxy` architecture). 
+Look at the `index.html` file code:
+`<script type="module" crossorigin src="/assets/index-2V0w6vas.js"></script>`
+Notice the slash (`/`) at the very beginning of the `src` attribute? That tells the browser: "Go to the absolute root domain of this website to find this file."
+Your R2 bucket's public URL looks something like this: `https://pub-abc.r2.dev/outputs/project_123/deploy_456/index.html`. 
+But when the browser reads `/assets/...` it completely ignores everything after the domain and tries to fetch: `https://pub-abc.r2.dev/assets/index-2V0w6vas.js` (which obviously doesn't exist at the root of your bucket!).
+
+How Vercel (and our Reverse Proxy Server) solves this:
+We never give the user the ugly R2 bucket link. Instead, we give them a custom domain like `http://project_123.localhost:8000`. 
+When the browser loads that URL, the browser natively asks for `http://project_123.localhost:8000/assets/index.js`. 
+Our Proxy Server catches that incoming request, says "Ah, this is for project_123," and translates it behind the scenes to fetch the correct file from the deep `outputs/project_123/...` folder in R2 and returns the code flawlessly. To the browser, it looks like a normal website hosted directly at the root domain!

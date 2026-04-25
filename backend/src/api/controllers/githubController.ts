@@ -54,6 +54,7 @@ export const createProject = async (req: AuthRequest, res: Response) => {
     const { 
       repoOwner, 
       repoName, 
+      branch = "main", // Now we extract the branch from the request!
       framework = "VITE", 
       rootDirectory = "/", // Handled the Monorepo requirement!
       installCommand = "npm install", 
@@ -78,6 +79,7 @@ export const createProject = async (req: AuthRequest, res: Response) => {
       name: repoName,
       subdomain: subdomain,
       repoName: `${repoOwner}/${repoName}`,
+      rootDirectory: rootDirectory,
       framework: framework,
       installCommand: installCommand,
       buildCommand: buildCommand,
@@ -88,7 +90,6 @@ export const createProject = async (req: AuthRequest, res: Response) => {
     const githubToken = decryptToken(user.githubAccessToken);
 
     // Ask GitHub for the latest commit on the selected branch
-    const branch = "main"; // Ensure we get this from request or fallback
     let commitResponse;
     try {
       commitResponse = await axios.get(
@@ -100,8 +101,8 @@ export const createProject = async (req: AuthRequest, res: Response) => {
           }
         }
       );
-    } catch (err) {
-      console.error("Failed to fetch initial commit. Is the repository initialized?");
+    } catch (err: any) {
+      console.error(`Failed to fetch initial commit for branch '${branch}':`, err.response?.data?.message || err.message);
       // We could optionally clean up the project here if we decide to fail completely.
     }
 

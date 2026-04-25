@@ -22,13 +22,14 @@ export const ENV = {
   FRONTEND_URL: getEnv("FRONTEND_URL"),
   GITHUB_WEBHOOK_SECRET: getEnv("GITHUB_WEBHOOK_SECRET"),
   WEBHOOK_PROXY_URL: getEnv("WEBHOOK_PROXY_URL"), 
+  R2_ACCESS_KEY_ID: getEnv("R2_ACCESS_KEY_ID"),
+  R2_SECRET_ACCESS_KEY: getEnv("R2_SECRET_ACCESS_KEY"),
+  R2_ENDPOINT: getEnv("R2_ENDPOINT"),
+  R2_BUCKET_NAME: getEnv("R2_BUCKET_NAME"),
 
 };
 
 
 //   // Cloudflare R2 Storage
-//   R2_ACCESS_KEY_ID: getEnv("R2_ACCESS_KEY_ID"),
-//   R2_SECRET_ACCESS_KEY: getEnv("R2_SECRET_ACCESS_KEY"),
-//   R2_ENDPOINT: getEnv("R2_ENDPOINT"),
-//   R2_BUCKET_NAME: getEnv("R2_BUCKET_NAME"),
+//   
 //   R2_PUBLIC_URL: process.env.R2_PUBLIC_URL, // Optional, so we don't force it via getEnv

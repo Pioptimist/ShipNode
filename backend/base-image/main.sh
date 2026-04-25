@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e
 # 1. Echo a startup message for our Live Logs!
 echo "Shipnode Sandbox Initialized"
 
@@ -21,7 +21,8 @@ git checkout "$COMMIT_HASH"
 
 # Move into the specific project directory inside the monorepo
 echo "Navigating to root directory: $ROOT_DIR"
-cd "$WORKSPACE_DIR$ROOT_DIR"
+cd "$WORKSPACE_DIR/$ROOT_DIR"  
+# notice we are using absolute path here to avoid any confusion about where we are in the filesystem not relative so it wont throw an error
 
 echo "Installing Dependencies ($INSTALL_CMD)..."
 eval "$INSTALL_CMD"
@@ -29,7 +30,7 @@ eval "$INSTALL_CMD"
 echo "Building Project ($BUILD_CMD)..."
 eval "$BUILD_CMD"
 
-echo "✅ Build Complete! Launching Cloudflare R2 Uploader..."
+echo "Build Complete! Launching Cloudflare R2 Uploader..."
 
 # 5. Call the Node.js script we baked into the image earlier
 node /home/app/upload.js

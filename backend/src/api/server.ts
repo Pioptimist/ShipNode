@@ -2,12 +2,12 @@ import express, { Request, Response } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 // (Note: In Node ES Modules, we import the .js extension even though the file is .ts)
-import { ENV } from "./lib/env.js";
-import { db } from "./db/index.js";
-import authRoutes from "./api/routes/authRoutes.js";
-import githubRoutes from "./api/routes/githubRoutes.js";
-import projectRoutes from "./api/routes/projectRoutes.js";
-import webhookRoutes from "./api/routes/webhookRoutes.js";
+import { ENV } from "../lib/env.js";
+import { db } from "../db/index.js";
+import authRoutes from "./routes/authRoutes.js";
+import githubRoutes from "./routes/githubRoutes.js";
+import projectRoutes from "./routes/projectRoutes.js";
+import webhookRoutes from "./routes/webhookRoutes.js";
 const app = express();
 
 app.use(

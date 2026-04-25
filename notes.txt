@@ -198,6 +198,9 @@ WHAT WE HAVE BUILT SO FAR (API / Control Plane)
 2. Project & Webhook System (`projectRoutes.ts`, `githubController.ts`, `deploymentService.ts`)
 - Repository Fetching: Hits GitHub API with the decrypted token to list user repos, stripping out unnecessary metadata.
 - Project Creation: Saves a project to the Neon DB, generates a unique `.shipnode.app` subdomain, and generates a DNS verification token for future custom domains.
+
+******************************************************
+
 - The Webhook Handshake: Programmatically attaches a GitHub Webhook to the user's repository so GitHub notifies Shipnode on every `git push`. Includes rollback logic to delete the project if the webhook fails to attach.
 - Webhook Reception & Security: Intercepts GitHub `push` events. Uses `express.json` to capture the exact raw buffer of the request, then uses `crypto.timingSafeEqual` and HMAC SHA-256 to cryptographically verify that the payload legitimately came from GitHub using our `GITHUB_WEBHOOK_SECRET`.
 - Deployment Queuing: Automatically searches for all Shipnode projects tied to the pushed repository and inserts a `QUEUED` deployment row into the database, tagging the exact `commitHash` and `branch`.
@@ -339,12 +342,6 @@ A: In Docker, the `.` simply means "the current directory you are sitting in ins
 When you run `docker build`, Docker needs to know exactly where to find the `Dockerfile` and all the files you want to `COPY` into the image (like `package.json` and `upload.js`). By putting the `.`, you are telling Docker Engine: "Look in the folder I am currently running this command from, read the Dockerfile here, grab these files, and bake everything into an image named `shipnode-builder`." If you forgot the `.`, the command would fail because Docker wouldn't know where to look!
 
 
-***************************************
-docker run -e REPO_URL="https://github.com/Pioptimist/My-portfolioo" -e COMMIT_HASH="main" -e ROOT_DIR="/" -e INSTALL_CMD="npm install" -e BUILD_CMD="npm run build" -e PROJECT_ID="test_proj_01" -e DEPLOYMENT_ID="test_dep_01" -e REDIS_URL="redis://host.docker.internal:6379" -e R2_ENDPOINT="https://0a7e499be37dae5e07d73e185842344d.r2.cloudflarestorage.com" -e R2_ACCESS_KEY_ID="812baa8aa7b3821f2e5d319e57d8a6ae" -e R2_SECRET_ACCESS_KEY="97935c8b2bd1a217b7c1d26fd11fab9bde2058edb702bedbb50074628e2127b3" -e R2_BUCKET_NAME="shipnode-projects" shipnode-builder
-
-command to check docker file i just created.
-**************************************************
-
 Q11: I went to my Cloudflare R2 public URL to view the `index.html` file we just deployed. It's a completely blank page, and the console says 404 Not Found for `assets/index.js` and `assets/index.css`! Did a piece break?
 A: No! Your Docker image worked flawlessly. It extracted the files perfectly and uploaded them perfectly. 
 The reason you got a blank page is the exact reason why Vercel uses "Reverse Proxies" (our upcoming `src/proxy` architecture). 
@@ -358,3 +355,167 @@ How Vercel (and our Reverse Proxy Server) solves this:
 We never give the user the ugly R2 bucket link. Instead, we give them a custom domain like `http://project_123.localhost:8000`. 
 When the browser loads that URL, the browser natively asks for `http://project_123.localhost:8000/assets/index.js`. 
 Our Proxy Server catches that incoming request, says "Ah, this is for project_123," and translates it behind the scenes to fetch the correct file from the deep `outputs/project_123/...` folder in R2 and returns the code flawlessly. To the browser, it looks like a normal website hosted directly at the root domain!
+
+Q12: In the Proxy Server, why do we need this code block: `if (response.ContentType) { res.setHeader('Content-Type', response.ContentType); }`?
+A: When your Node server fetches a file from Cloudflare R2, it's just receiving a raw stream of a million bytes. 
+If we send these raw bytes directly to a web browser without a label, the browser panics. Instead of displaying a beautiful website, the browser usually just violently forces a file download! 
+By explicitly extracting and passing along the `ContentType` we got from R2 (like `text/html`, `text/css`, or `image/jpeg`) as a "header" down to the user's browser, we are legally instructing the browser: "Hey, do not download this. Treat these bytes as a stylesheet and paint the website blue!" 
+(This is exactly why we used the `mime-types` package inside the Docker Sandbox `upload.js` earlier—if we didn't save the correct label to S3 then, we wouldn't have it to give to the browser now!)
+
+Q13: What exactly does `response.Body?.pipe(res)` mean? Why don't we just use `res.send()` to send the file normally?
+A: If we used `res.send()` to deliver files, Node.js would have to download the ENTIRE file from Cloudflare into the Proxy Server's RAM before sending it to the user. 
+If 100 users hit your proxy server at the exact same second to watch a 50MB background video on a portfolio site, your tiny Node server would instantly try to load 5,000MB of data into its RAM. The server would instantly crash with an "Out of Memory" fatal error!
+Instead, `.pipe()` connects a literal "hose" from Cloudflare directly to the user's browser. As Cloudflare sends a tiny 1MB chunk to the Node Proxy, the Proxy instantly flushes it down the pipe to the user's browser, clearing it out of RAM immediately. The data safely "flows through" the Proxy server without ever piling up. This is how Vercel can serve Terabytes of traffic smoothly on tiny servers!
+
+Q14: Wait, I installed the `http-proxy` package earlier. Why didn't we use `http-proxy` to build this Reverse Proxy Server?
+A: `http-proxy` is a fantastic tool, but it is built for a completely different kind of routing! 
+If you use `http-proxy`, it expects to take an incoming request and **forward it to another running web server** (like forwarding Port 80 to Port 3000 where another Express app is running). 
+In our architecture, the files are sitting "dead" inside a Cloudflare R2 hard drive bucket. There is no web server running inside Cloudflare R2 to receive an `http-proxy` forward! Cloudflare R2 only speaks the "S3 Protocol".
+Therefore, we *must* use the `@aws-sdk/client-s3` package to explicitly reach into the bucket, grab the "dead" file bytes, and stream them backwards to the user ourselves. We are essentially building our own raw proxy from scratch to bridge HTTP calls to S3 protocol calls.
+
+
+
+***************************************
+docker run -e REPO_URL="https://github.com/Pioptimist/My-portfolioo" -e COMMIT_HASH="main" -e ROOT_DIR="/" -e INSTALL_CMD="npm install" -e BUILD_CMD="npm run build" -e PROJECT_ID="test_proj_01" -e DEPLOYMENT_ID="test_dep_01" -e REDIS_URL="redis://host.docker.internal:6379" -e R2_ENDPOINT="https://..." -e R2_ACCESS_KEY_ID="..." -e R2_SECRET_ACCESS_KEY="..." -e R2_BUCKET_NAME="shipnode-projects" shipnode-builder
+
+command to check docker file i just created.
+**************************************************
+
+Q15: Why did the Docker container only upload 'favicon.ico' and 'vite.svg' instead of the real 'index.html' when testing the CI/CD pipeline?
+A: This exact failure happened due to a chain reaction of three very specific bugs combining together. Here is the step-by-step failure breakdown:
+
+1. The Bad Postman Request (The Trigger)
+We sent a Postman request without specifying the branch, so the API defaulted to requesting `"main"`. GitHub returned a 404 error because the repository actually used `"master"`. Because of the 404, our API caught the error and skipped adding the new dynamic job data to the BullMQ Redis Queue.
+
+2. The "Ghost Jobs" (The Execution)
+Because our new correct job wasn't added to the queue, when we started the Worker (`npm run dev:worker`), it immediately picked up "Ghost Jobs" (Jobs #2 and #3). These were old, broken jobs that were stuck in the Redis queue from our earlier testing *before* we fixed the Monorepo `rootDirectory` code! 
+These broken "Ghost Jobs" contained the default `rootDir: "/"` instead of the correct `rootDir: "frontend/ebook"`.
+
+3. The Wrong Directory Build (The Root Cause)
+Because the Ghost Job passed `rootDir: "/"` into the container, here is what the Docker Sandbox actually did inside the VM:
+- It cloned the `AI-eBook` repository perfectly.
+- It navigated to the literal root `/` of the repository.
+- It blindly ran `npm install` and `npm run build` in the root directory.
+- It completely ignored the nested Vite app sitting in `frontend/ebook/`!
+
+4. The False Positive "Success" (The Result)
+If you run `npm run build` in a completely empty folder, Vite doesn't crash. It says "Oh, there's no code here? I'll just package whatever I can find." 
+It found generic boilerplate files like `vite.svg` and `react.svg` sitting around, built a tiny hollow shell, and said `Build Complete!`. 
+Our `upload.js` script then completely blindly took that empty hollow shell and uploaded it to Cloudflare R2 right over the top of our previous test project (`test_proj_01`) because the Ghost Jobs were still using hardcoded test variables!
+
+Conclusion: The Sandbox code didn't fail. Docker worked flawlessly. R2 worked flawlessly. The UI merely showed us the exact empty directory that we accidentally explicitly commanded it to build via our stuck, malformed test jobs!
+
+**************************************************
+DEVOPS CHEAT SHEET: ESSENTIAL DOCKER TERMINAL COMMANDS
+
+1. How do I see a list of my previously run containers?
+docker ps -a
+(This lists every container you have ever run on your machine. You will need the "CONTAINER ID" column - like `9b8c0a4211ff` - from this list to run most commands below. Add `-n 2` at the end to only see the most recent 2 containers, or `-q` to just get the raw ID strings).
+
+2. How do I read the terminal output/logs of a container that already died?
+docker logs <CONTAINER_ID>
+e.g. `docker logs 9b8c0a4211ff`
+(This is how we diagnosed the "ghost job" bug! We read the terminal output of a Docker Sandbox long after it had died and vanished).
+
+3. How do I see a list of all the downloaded App Blueprints (Images) taking up hard drive space?
+docker images
+
+4. How do I force delete a specific dead container?
+docker rm <CONTAINER_ID>
+
+5. How do I violently force kill a container that has frozen and is stuck running forever?
+docker kill <CONTAINER_ID>
+
+6. My hard drive is completely full... How do I delete EVERY dead container and unused image all at once safely?
+docker system prune -a
+(Warning: This deletes everything except actively running containers and actively used images. Highly recommended to run this once a month when doing heavy Docker sandboxing!)
+**************************************************
+TEACHER'S GUIDE: ARCHITECTURE OF THE REAL-TIME LOGGING SYSTEM
+******************************************************
+
+Topic 1: Why Use a Class? (Object-Oriented Programming in Node.js)
+When writing a worker that processes background jobs, you might have multiple Docker deployments building at the exact same time. 
+If we used global variables for our `logsBuffer`, `projectId`, or `deploymentId`, Job A and Job B would accidentally overwrite each other's logs! 
+By using an ES6 `class DeploymentLogger`, we encapsulate (wrap up) the state. Every single time a new deployment starts, we type `new DeploymentLogger(id, id)`. This creates an isolated, self-contained "instance" in the server's memory specifically dedicated to that exact build, guaranteeing the logs never cross streams.
+
+Topic 2: Real-time Docker Streaming (container.attach)
+Normally, you wait for a Docker container to finish building and then ask it for the final logs (`container.logs()`). That is how Vercel works in the background, but it's terrible for a live user watching the dashboard. 
+```javascript
+const stream = await container.attach({
+    stream: true,
+    stdout: true,
+    stderr: true
+});
+```
+This code actively connects our Node.js worker directly to the Docker container's internal terminal output pipes while it is actively running. As the container types a letter, our Node app instantly receives it.
+
+Topic 3: Docker's Multiplexed Streams (modem.demuxStream)
+Docker sends both `stdout` (normal console logs) and `stderr` (error logs warning strings) over the exact same raw TCP connection. 
+To tell the difference, Docker prepends a microscopic 8-byte binary header to every single line. 
+```javascript
+stream.on('data', Buffer.from); // for type safety, initializes the buffer
+container.modem.demuxStream(stream, {
+    write: (chunk: Buffer) => logger.appendLog(chunk)
+}, {
+    write: (chunk: Buffer) => logger.appendLog(chunk)
+});
+```
+If we just listened to raw data, our logs would be full of garbage characters (like `^@^@^@^A npm install`). 
+`container.modem.demuxStream` is a built-in Dockerode utility that strips away those 8-byte headers completely, cleanly separates the normal outputs and errors, and funnels pure strings directly into our `logger.appendLog()` function.
+
+Topic 4: The Stream Flush Hack (setTimeout) & S3 Upload
+Streams are asynchronous—data travels like water in a pipe. When the Docker container says "I'm done" and dies, the very last few drops of water might still be traveling inside the Node.js pipe.
+```javascript
+await new Promise(r => setTimeout(r, 1000));
+const logsUrl = await logger.uploadToStorage();
+```
+We intentionally freeze the worker for exactly 1000 milliseconds (1 second) before uploading. This gives the pipe time to fully drain so we don't accidentally chop off the final "Build Successful!" message from the text file. After the pause, `uploadToStorage` takes the massive in-memory string and shoots it up to Cloudflare R2 / AWS S3 as a permanent `.log` file.
+
+Topic 5: The `logger.ts` Breakdown
+The `DeploymentLogger` class does exactly two things:
+1. `appendLog(chunk)`: It receives a buffer chunk from Docker, converts it to readable text, adds it to a giant string variable (`this.logsBuffer`), and instantly fires a copy of it to Redis Pub/Sub (`redis.publish`) so the WebSockets can broadcast it live to the React user.
+2. `uploadToStorage()`: Called only when the build finishes or crashes. It packages the `this.logsBuffer` string into an AWS `PutObjectCommand` and uploads it to S3, returning the final permanent URL for the database to save.
+
+Topic 6: Demystifying "demuxStream" and Why "write" is Written Twice!
+Let's look at this specific block of code from our Docker stream:
+```javascript
+stream.on('data', Buffer.from); // for type safety, though it shouldn't matter
+
+// Use dockerode's internal modem method to correctly demultiplex headers
+container.modem.demuxStream(stream, {
+    write: (chunk: Buffer) => logger.appendLog(chunk)
+}, {
+    write: (chunk: Buffer) => logger.appendLog(chunk)
+});
+```
+
+Question 1: What is `stream.on('data', Buffer.from);` actually doing?
+In Node.js, streams start in a "paused" state. They won't actually flow water (data) until you physically attach a listener to them or tell them to `.resume()`. 
+By attaching `.on('data', ...)`, we are forcefully turning the faucet ON so the Docker container's binary output starts flowing into our Node process. 
+`Buffer.from` is just a dummy function here. It consumes the raw data chunks to keep the stream flowing cleanly without crashing or backing up, while the *real* work is handled below it by the modem.
+
+Question 2: What is `container.modem.demuxStream` and why is `write` in there TWICE?
+This is the most important part of Docker networking!
+When a Docker container runs, it outputs TWO completely different streams of data:
+1. `stdout` (Standard Output): Normal logs, like "Running npm install..." or "Build successful."
+2. `stderr` (Standard Error): Scary error logs, like "SyntaxError on line 5" or "Module not found."
+
+Because Docker has to send both of these streams over a single TCP connection (one wire), it "Multiplexes" them (mixes them together). To prevent them from turning into unreadable garbage, Docker slaps an 8-byte binary header on every single line it sends. The header literally says: "Hi, I am an 8-byte secret code, and the following text is an Error!"
+
+`demuxStream` (De-Multiplex Stream) is a special tool built into Dockerode that strips those 8-byte secret codes off the text and splits the mixture back into two separate pipes.
+
+It takes 3 arguments:
+1. The source stream (the mixed water).
+2. The destination object for `stdout` (normal logs).
+3. The destination object for `stderr` (error logs).
+
+Why is `write` written twice?
+Because we must provide an object with a `write` function for BOTH `stdout` AND `stderr`. 
+```javascript
+container.modem.demuxStream(
+    stream, 
+    { write: stdoutChunk => logger.appendLog(stdoutChunk) }, // Pipe 1: Normal Logs
+    { write: stderrChunk => logger.appendLog(stderrChunk) }  // Pipe 2: Error Logs
+);
+```
+If we only wrote it once, we would only capture the successful `npm install` messages, but if the React app crashed with a massive error, it would be thrown into the void, and our user dashboard would just freeze forever without showing the error! By writing it twice, we are telling Docker: "Take both the normal logs AND the error logs, and dump ALL of them into my `logger.appendLog()` function!"

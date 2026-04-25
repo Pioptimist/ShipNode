@@ -4,6 +4,7 @@ import { db } from "../../db/index.js";
 import { projects, deployments } from "../../db/schema.js";
 import { ENV } from "../../lib/env.js";
 import axios from "axios";
+import { deployQueue } from "../../lib/queue.js"; // <-- ADDED THIS IMPORT
 
 import { decryptToken } from "../../utils/crypto.js"; // Your decryption function
 
@@ -93,6 +94,7 @@ export const queueNewDeployment = async (
 
   // 2. Insert the new deployment into the database queue for EACH matching project
   for (const project of matchingProjects) {
+    // 2a. Save to Database
     const [newDeployment] = await db.insert(deployments).values({
       projectId: project.id,
       branch: branch,
@@ -100,6 +102,18 @@ export const queueNewDeployment = async (
       commitMessage: commitMessage,
       status: "QUEUED",
     }).returning();
+    
+    // 2b. Push EXACT job data to BullMQ so the Worker (processor.ts) can process it!
+    await deployQueue.add("deploy-job", {
+      projectId: project.id,
+      deploymentId: newDeployment.id,
+      repoUrl: `https://github.com/${repoFullName}`,
+      commitHash: commitHash,
+      rootDir: project.rootDirectory || "/", 
+      installCmd: project.installCommand || "npm install",
+      buildCmd: project.buildCommand || "npm run build"
+    });
+
     queuedDeployments.push(newDeployment);
   }
 

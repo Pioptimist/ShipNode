@@ -5,9 +5,13 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev:api": "tsx watch src/api/server.ts",
+    "dev:proxy": "tsx watch src/proxy/server.ts",
+    "dev:worker": "tsx watch src/worker/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start:api": "node dist/api/server.js",
+    "start:proxy": "node dist/proxy/server.js",
+    "start:worker": "node dist/worker/server.js",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push"
   },

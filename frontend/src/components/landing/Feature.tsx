@@ -1,30 +1,31 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatedWave } from "./AnimatedWave";
 
 const features = [
   {
     number: "01",
     title: "Instant Deployment",
-    description: "Push to production in seconds. Our edge network ensures your applications load instantly, anywhere in the world.",
+    description: "Push to GitHub and watch it build. Our Node.js workers instantly spawn isolated Docker sandboxes to compile your code.",
     visual: "deploy",
   },
   {
     number: "02",
-    title: "AI-Native Workflows",
-    description: "Build intelligent applications with built-in AI capabilities. From inference to training, everything scales automatically.",
+    title: "Cloudflare Edge Routing",
+    description: "Your compiled assets are pushed to Cloudflare R2 object storage. Our Express reverse-proxy instantly resolves your unique subdomains.",
     visual: "ai",
   },
   {
     number: "03",
-    title: "Real-time Collaboration",
-    description: "Work together seamlessly. Live preview, instant feedback, and version control that actually makes sense.",
+    title: "Real-time Build Logs",
+    description: "Watch your deployment compile line-by-line. Docker streams are de-multiplexed and broadcasted to your dashboard via WebSockets.",
     visual: "collab",
   },
   {
     number: "04",
-    title: "Enterprise Security",
-    description: "Bank-grade encryption, SOC 2 compliance, and granular access controls. Your data stays yours.",
+    title: "Enterprise Vault Security",
+    description: "GitHub OAuth tokens and environment variables are strictly AES-256-GCM encrypted at rest inside our serverless Neon database.",
     visual: "security",
   },
 ];
@@ -316,9 +317,14 @@ export function FeaturesSection() {
     <section
       id="features"
       ref={sectionRef}
-      className="relative py-24 lg:py-32"
+      className="relative py-24 lg:py-32 bg-background overflow-hidden"
     >
-      <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
+      {/* Animated Wave Background */}
+      <div className="absolute inset-0 opacity-[0.15] pointer-events-none">
+        <AnimatedWave />
+      </div>
+
+      <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-12">
         {/* Header */}
         <div className="mb-16 lg:mb-24">
           <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-6">

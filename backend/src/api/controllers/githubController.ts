@@ -2,17 +2,25 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authMiddleware.js";
 import { db } from "../../db/index.js";
 import { eq } from "drizzle-orm"; // added eq import
-import { projects } from "../../db/schema.js";
+import { users, projects } from "../../db/schema.js";
 import { createGithubWebhook,verifyWebhookSignature, queueNewDeployment } from "../services/deploymentService.js";
 import crypto from "crypto";
 import axios from "axios";
 import { decryptToken } from "../../utils/crypto.js";
-
+import { fetchRepoContentsService } from "../services/githubService.js";
 
 export const getUserRepositories = async (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user;
-    const githubToken = decryptToken(user.githubAccessToken);
+    const userPayload = req.user;
+    if (!userPayload) {
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+    const [dbUser] = await db.select().from(users).where(eq(users.id, userPayload.id));
+    if (!dbUser || !dbUser.githubAccessToken) {
+        return res.status(403).json({ message: "GitHub token missing or expired. Please re-authenticate." });
+    }
+
+    const githubToken = decryptToken(dbUser.githubAccessToken);
 
     // Fetch the 100 most recently updated repos
     const response = await axios.get("https://api.github.com/user/repos", {
@@ -47,16 +55,18 @@ export const getUserRepositories = async (req: AuthRequest, res: Response) => {
 
 export const createProject = async (req: AuthRequest, res: Response) => {
   try {
-    // 1. The Gatekeeper middleware guarantees this user exists
-    const user = req.user; 
     
-    // 2. Grab the deployment settings from the React frontend
+    const userPayload = req.user; 
+    if (!userPayload) {
+        return res.status(401).json({ message: "Unauthorized: Please log in." });
+    }
+    
     const { 
       repoOwner, 
       repoName, 
-      branch = "main", // Now we extract the branch from the request!
+      branch = "main", 
       framework = "VITE", 
-      rootDirectory = "/", // Handled the Monorepo requirement!
+      rootDirectory = "/", 
       installCommand = "npm install", 
       buildCommand = "npm run build", 
       outputDirectory = "dist" 
@@ -66,16 +76,16 @@ export const createProject = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "Repository owner and name are required." });
     }
 
-    // 3. Generate a unique Shipnode subdomain (e.g., my-app-9a8b)
+    // a unique Shipnode subdomain (e.g., my-app-9a8b)
     const randomHash = crypto.randomBytes(3).toString("hex");
     const subdomain = `${repoName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${randomHash}`;
     
-    // Generate a DNS verification token (for Custom Domains later)
+    // DNS verification token for Custom Domains later
     const domainVerificationToken = `shipnode-verify-${crypto.randomBytes(16).toString("hex")}`;
 
     // 4. Save the Project to our Neon Database
     const [newProject] = await db.insert(projects).values({
-      userId: user.id,
+      userId: userPayload.id,
       name: repoName,
       subdomain: subdomain,
       repoName: `${repoOwner}/${repoName}`,
@@ -87,7 +97,16 @@ export const createProject = async (req: AuthRequest, res: Response) => {
       domainVerificationToken: domainVerificationToken
     }).returning();
 
-    const githubToken = decryptToken(user.githubAccessToken);
+    
+    const [dbUser] = await db.select().from(users).where(eq(users.id, userPayload.id));
+    
+    if (!dbUser || !dbUser.githubAccessToken) {
+        // ROLLBACK: Delete the ghost project if we can't authenticate with GitHub
+        await db.delete(projects).where(eq(projects.id, newProject.id));
+        return res.status(403).json({ message: "GitHub token missing or expired. Please re-authenticate." });
+    }
+
+    const githubToken = decryptToken(dbUser.githubAccessToken);
 
     // Ask GitHub for the latest commit on the selected branch
     let commitResponse;
@@ -103,7 +122,6 @@ export const createProject = async (req: AuthRequest, res: Response) => {
       );
     } catch (err: any) {
       console.error(`Failed to fetch initial commit for branch '${branch}':`, err.response?.data?.message || err.message);
-      // We could optionally clean up the project here if we decide to fail completely.
     }
 
     if (commitResponse) {
@@ -119,16 +137,17 @@ export const createProject = async (req: AuthRequest, res: Response) => {
       );
     }
 
-    // 5. The Magic Handshake: Call GitHub and attach the Webhook!
+    // Call GitHub and attach the Webhook
     try {
-      await createGithubWebhook(user.githubAccessToken, repoOwner, repoName);
+      // Pass the raw decrypted token to your webhook creator
+      await createGithubWebhook(githubToken, repoOwner, repoName);
     } catch (webhookError) {
-      // ROLLBACK: If the webhook fails to attach (e.g., rate limit, deleted repo), delete the project so the user isn't stuck with a dead project
+      // ROLLBACK: If it fails
       await db.delete(projects).where(eq(projects.id, newProject.id));
-      throw webhookError; // Re-throw to be caught by the outer catch block
+      throw webhookError; 
     }
 
-    // 6. Return success to the frontend!
+
     return res.status(201).json({
       success: true,
       message: "Project created and webhook attached successfully.",
@@ -185,5 +204,47 @@ export const handleGithubWebhook = async (req: Request | any, res: Response) => 
   } catch (error: any) {
     console.error("Webhook Error:", error.message);
     return res.status(200).json({ message: "Internal error processing webhook." }); 
+  }
+};
+
+
+
+
+export const getRepoContents = async (req: AuthRequest, res: Response) => {
+  try {
+    const userPayload = req.user;
+    if (!userPayload) {
+      return res.status(401).json({ message: "Unauthorized: Please log in." });
+    }
+
+    // Since this is a GET request, we take data from req.query, not req.body
+    const { repoOwner, repoName, path = "" } = req.query;
+
+    if (!repoOwner || !repoName) {
+      return res.status(400).json({ message: "Repository owner and name are required." });
+    }
+
+    // Pass the work to the Service
+    const contents = await fetchRepoContentsService(
+      userPayload.id,
+      repoOwner as string,
+      repoName as string,
+      path as string
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: contents
+    });
+
+  } catch (error: any) {
+    console.error("Get Repo Contents Error:", error);
+
+    // Handle specific errors thrown by the Service
+    if (error.message === "GITHUB_AUTH_FAILED") {
+      return res.status(403).json({ message: "GitHub token missing or expired. Please re-authenticate." });
+    }
+
+    return res.status(500).json({ message: "Failed to fetch repository contents." });
   }
 };

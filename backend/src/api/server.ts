@@ -1,6 +1,8 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import http from "http";
+
 // (Note: In Node ES Modules, we import the .js extension even though the file is .ts)
 import { ENV } from "../lib/env.js";
 import { db } from "../db/index.js";
@@ -8,7 +10,15 @@ import authRoutes from "./routes/authRoutes.js";
 import githubRoutes from "./routes/githubRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
 import webhookRoutes from "./routes/webhookRoutes.js";
+
+// 🚨 2. IMPORT YOUR NEW SOCKET HANDLER
+import { initializeSockets } from "./socket/socket.js"; 
+
 const app = express();
+const server = http.createServer(app);
+
+
+initializeSockets(server);
 
 app.use(
   cors({
@@ -42,8 +52,10 @@ app.use("/api/webhooks", webhookRoutes);
 const startServer = async () => {
   try {
     const res = await db.execute("SELECT 1 as ok");
-    console.log(res.rows[0]);
-    app.listen(ENV.PORT, () => {
+    console.log("Database connected:", res.rows[0]);
+    
+
+    server.listen(ENV.PORT, () => {
       console.log(`Server is running on http://localhost:${ENV.PORT}`);
     });
   } catch (error) {

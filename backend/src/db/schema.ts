@@ -5,6 +5,8 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   githubId: varchar("github_id", { length: 255 }).unique().notNull(),
   email: varchar("email", { length: 255 }).notNull(),
+  username: varchar("username", { length: 255 }), // NEW
+  avatarUrl: text("avatar_url"), // NEW
   githubAccessToken: text("github_access_token").notNull(), // AES-256 encrypted
   createdAt: timestamp("created_at").defaultNow(),
 });

@@ -5,10 +5,20 @@ import { useEffect, useRef } from "react";
 export function AnimatedWave() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef(0);
+  const isVisible = useRef(true);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // PERFORMANCE FIX: Only render when visible on screen
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isVisible.current = entry.isIntersecting;
+      },
+      { threshold: 0 }
+    );
+    observer.observe(canvas);
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -28,6 +38,12 @@ export function AnimatedWave() {
     window.addEventListener("resize", resize);
 
     const render = () => {
+      // PERFORMANCE FIX: Skip rendering frame if not in viewport
+      if (!isVisible.current) {
+        frameRef.current = requestAnimationFrame(render);
+        return;
+      }
+
       const rect = canvas.getBoundingClientRect();
       ctx.clearRect(0, 0, rect.width, rect.height);
 
@@ -35,8 +51,11 @@ export function AnimatedWave() {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      const cols = Math.floor(rect.width / 20);
-      const rows = Math.floor(rect.height / 20);
+      // PERFORMANCE FIX: Increased grid spacing from 20px to 32px
+      // This reduces draw calls by more than 2.5x per frame
+      const stepSize = 32;
+      const cols = Math.floor(rect.width / stepSize);
+      const rows = Math.floor(rect.height / stepSize);
 
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
@@ -54,7 +73,8 @@ export function AnimatedWave() {
           const charIndex = Math.floor(normalized * (chars.length - 1));
           const alpha = 0.15 + normalized * 0.5;
 
-          ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+          // Fixed color bug: RGBA (128, 128, 128) ensures it's visible in both light & dark modes
+          ctx.fillStyle = `rgba(128, 128, 128, ${alpha})`;
           ctx.fillText(chars[charIndex], px, py);
         }
       }

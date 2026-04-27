@@ -3,5 +3,7 @@ node_modules
 dist
 drizzle/*.sql
 notes.txt
+notes.frontend.txt
+notes.frontend
 .aidesigner/*
 !.aidesigner/.gitkeep

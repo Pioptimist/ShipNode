@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 const testimonials = [
   {
-    quote: "Optimus transformed our deployment pipeline. What used to take hours now happens in seconds.",
+    quote: "Shipnode transformed our deployment pipeline. What used to take hours now happens in seconds.",
     author: "Sarah Chen",
     role: "CTO",
     company: "Meridian Labs",

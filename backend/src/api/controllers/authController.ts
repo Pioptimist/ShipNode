@@ -4,6 +4,9 @@ import { ENV } from "../../lib/env.js";
 import { AuthRequest } from "../middleware/authMiddleware.js";
 import jwt from "jsonwebtoken";
 import { generateAccessToken } from "../../utils/jwt.js";
+import { db } from "../../db/index.js";
+import { eq } from "drizzle-orm"; // added eq import
+import { users } from "../../db/schema.js";
 
 export const githubLogin = (req: Request, res: Response) => {
 
@@ -49,10 +52,26 @@ export const githubCallback = async (req: Request, res: Response) => {
 
 export const getMe = async (req: AuthRequest, res: Response) => {
   try {
-    
+    if (!req.user) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    // Fetch the fresh user info directly from DB based on ID from JWT token
+    const [user] = await db.select({
+      id: users.id,
+      githubId: users.githubId,
+      email: users.email,
+      username: users.username,
+      avatarUrl: users.avatarUrl
+    }).from(users).where(eq(users.id, req.user.id));
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     return res.status(200).json({
       success: true,
-      data: req.user,
+      user, // Pass the explicit DB result
     });
 
   } catch (error) {
@@ -61,7 +80,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const refreshAccessToken = (req: Request, res: Response) => {
+export const refreshAccessToken = async (req: Request, res: Response) => {
   try {
     const refreshToken = req.cookies.refreshToken;
     if (!refreshToken) {
@@ -76,14 +95,22 @@ export const refreshAccessToken = (req: Request, res: Response) => {
       ENV.REFRESH_SECRET
     ) as { userId: number };
     
-    // Generate new access token using the correct userId property
-    const newAccessToken = generateAccessToken(decoded.userId);
+    
+    const [user] = await db.select().from(users).where(eq(users.id, decoded.userId));
+    
+    if (!user) {
+      throw new Error("User no longer exists");
+    }
 
+    // 🚨 FIX: Pass the full user object to the generator
+    const newAccessToken = generateAccessToken(user);
+
+    // Ensure your cookie options are consistent with your other controllers
     res.cookie("accessToken", newAccessToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: "none",
-      maxAge: 15 * 60 * 1000, // 15 min to match generateAccessToken
+      secure: true, 
+      sameSite: "lax", // Updated to "lax" for consistency with callback
+      maxAge: 15 * 60 * 1000, 
     });
 
     return res.status(200).json({
@@ -92,11 +119,18 @@ export const refreshAccessToken = (req: Request, res: Response) => {
 
   } catch (error) {
     // Invalid / expired refresh token
-    res.clearCookie("accessToken", { secure: true, sameSite: "none", httpOnly: true });
-    res.clearCookie("refreshToken", { secure: true, sameSite: "none", httpOnly: true });
+    res.clearCookie("accessToken", { secure: true, sameSite: "lax", httpOnly: true });
+    res.clearCookie("refreshToken", { secure: true, sameSite: "lax", httpOnly: true });
+    
     console.error("Refresh token error:", error);
     return res.status(401).json({
       message: "Session expired. Please log in again.", 
     });
   }
+};
+
+export const logout = (req: Request, res: Response) => {
+  res.clearCookie("accessToken", { secure: true, sameSite: "lax", httpOnly: true });
+  res.clearCookie("refreshToken", { secure: true, sameSite: "lax", httpOnly: true });
+  return res.status(200).json({ success: true, message: "Logged out successfully" });
 };

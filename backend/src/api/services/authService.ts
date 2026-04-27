@@ -51,28 +51,39 @@ export const handleGithubCallback = async (code: string) => {
       return { success: false, statusCode: 400, message: "No code provided by GitHub" };
     }
 
-    
     const rawGithubToken = await getGithubToken(code);
     const githubProfile = await getGithubUser(rawGithubToken);
 
     const email = githubProfile.email || `${githubProfile.login}@github.com`; 
     const githubId = githubProfile.id.toString();
 
-    
     const encryptedToken = encryptToken(rawGithubToken);
+    
+    // Extract new profile data
+    const username = githubProfile.login;
+    const avatarUrl = githubProfile.avatar_url;
+
     let [user] = await db.select().from(users).where(eq(users.githubId, githubId));
 
     if (!user) {
-      [user] = await db.insert(users).values({ githubId, email, githubAccessToken: encryptedToken }).returning();
+      // Insert with username & avatar
+      [user] = await db.insert(users)
+        .values({ githubId, email, username, avatarUrl, githubAccessToken: encryptedToken })
+        .returning();
     } else {
-      [user] = await db.update(users).set({ githubAccessToken: encryptedToken }).where(eq(users.githubId, githubId)).returning();
+      // Update with username & avatar so it stays fresh if they change their GitHub picture
+      [user] = await db.update(users)
+        .set({ githubAccessToken: encryptedToken, username, avatarUrl })
+        .where(eq(users.githubId, githubId))
+        .returning();
     }
 
+    // Pass the WHOLE user object here, not just user.id!
+    const accessToken = generateAccessToken(user);
     
-    const accessToken = generateAccessToken(user.id);
+    // Refresh token stays lean, it only needs the ID
     const refreshToken = generateRefreshToken(user.id);
 
-    
     return {
       success: true,
       statusCode: 200,
@@ -84,7 +95,6 @@ export const handleGithubCallback = async (code: string) => {
     if (error.response || error.message.includes("GitHub")) {
       return { success: false, statusCode: 400, message: "GitHub authentication failed or expired." };
     }
-    
     
     throw error;
   }

@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react";
 import { Button } from "./ui/Button";
 import { Menu, X } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const navLinks = [
   { name: "Features", href: "#features" },
   { name: "How it works", href: "#how-it-works" },
-  { name: "Developers", href: "#developers" },
-  { name: "Pricing", href: "#pricing" },
+  { name: "Security", href: "#security" },
 ];
 
 const Navigation = () => {
@@ -49,29 +49,34 @@ const Navigation = () => {
           </a>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-12">
+          <div className="hidden md:flex items-center justify-center flex-1 mx-8 gap-8">
             {navLinks.map((link) => (
               <a
                 key={link.name}
                 href={link.href}
-                className="text-sm text-foreground/70 hover:text-foreground transition-colors duration-300 relative group"
+                className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors duration-300"
               >
                 {link.name}
-                <span className="absolute -bottom-1 left-0 w-0 h-px bg-foreground transition-all duration-300 group-hover:w-full" />
               </a>
             ))}
           </div>
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4 shrink-0 whitespace-nowrap">
-            <a href="#" className={`whitespace-nowrap text-foreground/70 hover:text-foreground transition-all duration-500 shrink-0 ${isScrolled ? "text-xs" : "text-sm"}`}>
+            <Link to="/login" className="whitespace-nowrap text-foreground/70 hover:text-foreground transition-all duration-300 text-sm">
               Sign in
-            </a>
-            <Button
-              className={`whitespace-nowrap shrink-0 bg-foreground hover:bg-foreground/90 text-background rounded-full transition-all duration-500 ${isScrolled ? "px-4 h-8 text-xs" : "px-6"}`}
-            >
-              Start creating
-            </Button>
+            </Link>
+            <Link to="/signup">
+              <Button
+                className={`whitespace-nowrap shrink-0 transition-all duration-300 ${
+                  isScrolled 
+                    ? "bg-foreground hover:bg-foreground/90 text-background px-4 py-2 text-sm rounded-full" 
+                    : "bg-background hover:bg-foreground hover:text-background text-foreground border border-foreground px-6 py-2.5 text-sm rounded-full"
+                }`}
+              >
+                Start building free
+              </Button>
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -127,19 +132,22 @@ const Navigation = () => {
           }`}
           style={{ transitionDelay: isMobileMenuOpen ? "300ms" : "0ms" }}
           >
-            <Button 
-              
-              className="flex-1 rounded-full h-14 text-base"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Sign in
-            </Button>
-            <Button 
-              className="flex-1 bg-foreground text-background rounded-full h-14 text-base"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Start creating
-            </Button>
+            <Link to="/login" className="flex-1 block">
+              <Button 
+                className="w-full rounded-full h-14 text-base"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Sign in
+              </Button>
+            </Link>
+            <Link to="/signup" className="flex-1 block">
+              <Button 
+                className="w-full bg-foreground text-background rounded-full h-14 text-base"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Start creating
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

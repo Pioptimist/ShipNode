@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../ui/Button";
 import { ArrowRight } from "lucide-react";
 import { AnimatedTetrahedron } from "./AnimatedTetrahedron";
+import { AnimatedWave } from "./AnimatedWave";
 
 export function CtaSection() {
   const [isVisible, setIsVisible] = useState(false);
@@ -31,10 +32,15 @@ export function CtaSection() {
   };
 
   return (
-    <section ref={sectionRef} className="relative py-24 lg:py-32 overflow-visible">
-      <div className="max-w-[1400px] mx-auto px-6 lg:px-12">
+    <section ref={sectionRef} className="relative py-24 lg:py-32 overflow-hidden bg-background">
+      {/* Animated Wave Background */}
+      <div className="absolute inset-0 opacity-[0.15] pointer-events-none">
+        <AnimatedWave />
+      </div>
+
+      <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-12">
         <div
-          className={`relative border border-foreground bg-white transition-all duration-1000 ${
+          className={`relative border border-foreground/10 bg-background/50 backdrop-blur-sm rounded-3xl transition-all duration-1000 ${
             isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
           }`}
           onMouseMove={handleMouseMove}
@@ -58,8 +64,7 @@ export function CtaSection() {
                 </h2>
 
                 <p className="text-xl text-muted-foreground mb-12 leading-relaxed max-w-xl">
-                  Join thousands of teams shipping faster with Optimus. 
-                  Start free, scale infinitely.
+                  Join developers pushing to GitHub and letting Shipnode handle the rest. Real-time builds and instant Cloudflare deployments.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-start gap-4">
@@ -67,7 +72,7 @@ export function CtaSection() {
                     
                     className="bg-foreground hover:bg-foreground/90 text-background px-8 h-14 text-base rounded-full group"
                   >
-                    Start building free
+                    Deploy to Shipnode
                     <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover:translate-x-1" />
                   </Button>
                   <Button
@@ -75,12 +80,12 @@ export function CtaSection() {
                     
                     className="h-14 px-8 text-base rounded-full border-foreground/20 hover:bg-foreground/5"
                   >
-                    Talk to sales
+                    View Source Code
                   </Button>
                 </div>
 
                 <p className="text-sm text-muted-foreground mt-8 font-mono">
-                  No credit card required
+                  Fully containerized build environments.
                 </p>
               </div>
 
@@ -92,8 +97,8 @@ export function CtaSection() {
           </div>
 
           {/* Decorative corner */}
-          <div className="absolute top-0 right-0 w-32 h-32 border-b border-l border-foreground/10" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 border-t border-r border-foreground/10" />
+          <div className="absolute top-0 right-0 w-32 h-32 border-b border-l border-foreground/10 rounded-tr-3xl" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 border-t border-r border-foreground/10 rounded-bl-3xl" />
         </div>
       </div>
     </section>

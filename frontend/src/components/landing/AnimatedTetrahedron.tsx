@@ -5,10 +5,20 @@ import { useEffect, useRef } from "react";
 export function AnimatedTetrahedron() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef(0);
+  const isVisible = useRef(true);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // PERFORMANCE FIX: Only render when visible on screen
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isVisible.current = entry.isIntersecting;
+      },
+      { threshold: 0 }
+    );
+    observer.observe(canvas);
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -68,12 +78,18 @@ export function AnimatedTetrahedron() {
     });
 
     const render = () => {
+      // PERFORMANCE FIX: Skip rendering frame if not in viewport
+      if (!isVisible.current) {
+        frameRef.current = requestAnimationFrame(render);
+        return;
+      }
+
       const rect = canvas.getBoundingClientRect();
       ctx.clearRect(0, 0, rect.width, rect.height);
 
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
-      const scale = Math.min(rect.width, rect.height) * 0.7;
+      const scale = Math.min(rect.width, rect.height) * 0.55;
 
       ctx.font = "18px monospace";
       ctx.textAlign = "center";
@@ -149,7 +165,8 @@ export function AnimatedTetrahedron() {
       // Draw points
       points.forEach((point) => {
         const alpha = 0.15 + (point.z + 1.5) * 0.25;
-        ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(alpha, 0.9)})`;
+        // Use a neutral grey so it works in both light and dark backgrounds
+        ctx.fillStyle = `rgba(128, 128, 128, ${Math.min(alpha, 0.9)})`;
         ctx.fillText(point.char, point.x, point.y);
       });
 

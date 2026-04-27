@@ -1,42 +1,45 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatedWave } from "./AnimatedWave";
 
 const steps = [
   {
     number: "I",
-    title: "Connect your tools",
-    description: "Integrate with your existing stack in minutes. We support 200+ data sources out of the box.",
-    code: `import { optimus } from '@optimus/core'
-
-optimus.connect({
-  source: 'your-database',
-  sync: true
-})`,
+    title: "Connect GitHub Repo",
+    description: "Authorize Shipnode using the official GitHub OAuth flow. We generate a webhook, and you configure your build commands and root directory.",
+    code: `const webhook = await axios.post(
+  'api.github.com/repos/user/repo/hooks',
+  {
+    name: "web",
+    events: ["push"],
+    config: { url: webhookUrl }
+  }
+)`,
   },
   {
     number: "II",
-    title: "Build your workflow",
-    description: "Design powerful automations with our visual builder or write code directly.",
-    code: `optimus.workflow('process', {
-  trigger: 'event',
-  actions: [
-    'validate',
-    'transform', 
-    'deliver'
-  ]
-})`,
+    title: "Isolated Container Build",
+    description: "When code is pushed, BullMQ queues the job. Shipnode spawns a secure Docker environment to install dependencies and execute your build.",
+    code: `const container = await docker.createContainer({
+  Image: 'shipnode-builder',
+  Env: [
+    \`REPO_URL=\${url}\`,
+    \`BUILD_CMD=npm run build\`,
+  ],
+  NetworkMode: 'host'
+});`,
   },
   {
     number: "III",
-    title: "Ship to production",
-    description: "Deploy globally with zero configuration. Your app goes live in under 30 seconds.",
-    code: `optimus.deploy({
-  target: 'production',
-  regions: 'auto'
-})
-
-// Deployed to 12 regions`,
+    title: "Stream & Deploy",
+    description: "Build logs are streamed live to Redis Pub/Sub. Upon success, your output directory is synced to R2, instantly available on your Shipnode subdomain.",
+    code: `const command = new PutObjectCommand({
+  Bucket: ENV.R2_BUCKET_NAME,
+  Key: \`project_123/deploy_456/\${file}\`,
+  Body: fs.createReadStream(filePath)
+});
+await s3Client.send(command);`,
   },
 ];
 
@@ -68,26 +71,18 @@ export function HowItWorksSection() {
     <section
       id="how-it-works"
       ref={sectionRef}
-      className="relative py-24 lg:py-32 bg-foreground text-background overflow-hidden"
+      className="relative py-24 lg:py-32 bg-background text-foreground overflow-hidden"
     >
-      {/* Diagonal lines pattern */}
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
-        <div className="absolute inset-0" style={{
-          backgroundImage: `repeating-linear-gradient(
-            -45deg,
-            transparent,
-            transparent 40px,
-            currentColor 40px,
-            currentColor 41px
-          )`
-        }} />
+      {/* Animated Wave Background */}
+      <div className="absolute inset-0 opacity-[0.15] pointer-events-none">
+        <AnimatedWave />
       </div>
 
       <div className="relative z-10 max-w-[1400px] mx-auto px-6 lg:px-12">
         {/* Header */}
         <div className="mb-16 lg:mb-24">
-          <span className="inline-flex items-center gap-3 text-sm font-mono text-background/50 mb-6">
-            <span className="w-8 h-px bg-background/30" />
+          <span className="inline-flex items-center gap-3 text-sm font-mono text-muted-foreground mb-6">
+            <span className="w-8 h-px bg-foreground/30" />
             Process
           </span>
           <h2
@@ -97,7 +92,7 @@ export function HowItWorksSection() {
           >
             Three steps.
             <br />
-            <span className="text-background/50">Infinite possibilities.</span>
+            <span className="text-muted-foreground">Infinite possibilities.</span>
           </h2>
         </div>
 
@@ -110,25 +105,25 @@ export function HowItWorksSection() {
                 key={step.number}
                 type="button"
                 onClick={() => setActiveStep(index)}
-                className={`w-full text-left py-8 border-b border-background/10 transition-all duration-500 group ${
+                className={`w-full text-left py-8 border-b border-foreground/10 transition-all duration-500 group ${
                   activeStep === index ? "opacity-100" : "opacity-40 hover:opacity-70"
                 }`}
               >
                 <div className="flex items-start gap-6">
-                  <span className="font-display text-3xl text-background/30">{step.number}</span>
+                  <span className="font-display text-3xl text-foreground/30">{step.number}</span>
                   <div className="flex-1">
                     <h3 className="text-2xl lg:text-3xl font-display mb-3 group-hover:translate-x-2 transition-transform duration-300">
                       {step.title}
                     </h3>
-                    <p className="text-background/60 leading-relaxed">
+                    <p className="text-muted-foreground leading-relaxed">
                       {step.description}
                     </p>
                     
                     {/* Progress indicator */}
                     {activeStep === index && (
-                      <div className="mt-4 h-px bg-background/20 overflow-hidden">
+                      <div className="mt-4 h-px bg-foreground/20 overflow-hidden">
                         <div 
-                          className="h-full bg-background w-0"
+                          className="h-full bg-foreground w-0"
                           style={{
                             animation: 'progress 5s linear forwards'
                           }}
@@ -143,20 +138,20 @@ export function HowItWorksSection() {
 
           {/* Code display */}
           <div className="lg:sticky lg:top-32 self-start">
-            <div className="border border-background/10 overflow-hidden">
+            <div className="border border-foreground/10 overflow-hidden rounded-xl bg-background/50 backdrop-blur-sm">
               {/* Window header */}
-              <div className="px-6 py-4 border-b border-background/10 flex items-center justify-between">
+              <div className="px-6 py-4 border-b border-foreground/10 flex items-center justify-between">
                 <div className="flex gap-2">
-                  <div className="w-3 h-3 rounded-full bg-background/20" />
-                  <div className="w-3 h-3 rounded-full bg-background/20" />
-                  <div className="w-3 h-3 rounded-full bg-background/20" />
+                  <div className="w-3 h-3 rounded-full bg-foreground/20" />
+                  <div className="w-3 h-3 rounded-full bg-foreground/20" />
+                  <div className="w-3 h-3 rounded-full bg-foreground/20" />
                 </div>
-                <span className="text-xs font-mono text-background/40">workflow.ts</span>
+                <span className="text-xs font-mono text-muted-foreground">shipnode.ts</span>
               </div>
 
               {/* Code content */}
               <div className="p-8 font-mono text-sm min-h-[280px]">
-                <pre className="text-background/70">
+                <pre className="text-foreground/80">
                   {steps[activeStep].code.split('\n').map((line, lineIndex) => (
                     <div 
                       key={`${activeStep}-${lineIndex}`} 
@@ -165,7 +160,7 @@ export function HowItWorksSection() {
                         animationDelay: `${lineIndex * 80}ms`,
                       }}
                     >
-                      <span className="text-background/20 select-none w-8 inline-block">{lineIndex + 1}</span>
+                      <span className="text-foreground/30 select-none w-8 inline-block">{lineIndex + 1}</span>
                       <span className="inline-flex">
                         {line.split('').map((char, charIndex) => (
                           <span
@@ -185,9 +180,9 @@ export function HowItWorksSection() {
               </div>
 
               {/* Status */}
-              <div className="px-6 py-4 border-t border-background/10 flex items-center gap-3">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-xs font-mono text-background/40">Ready</span>
+              <div className="px-6 py-4 border-t border-foreground/10 flex items-center gap-3">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-xs font-mono text-muted-foreground">Ready</span>
               </div>
             </div>
           </div>

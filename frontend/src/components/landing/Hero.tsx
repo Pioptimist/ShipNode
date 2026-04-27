@@ -49,7 +49,7 @@ const Hero = () => {
           transition={{ duration: 0.5, delay: 0.45, ease }}
           className="text-xs lg:text-sm text-muted-foreground max-w-md mb-6 leading-relaxed font-mono"
         >
-          SYS.INT is the deterministic deployment layer between your models and your users. Sub-5ms inference. Global edge routing. Full operational control.
+          SHIPNODE is the deterministic deployment layer between your Git pushes and your users. Isolated Docker builds. Global edge routing. Full operational control.
         </motion.p>
       </div>
     </section>

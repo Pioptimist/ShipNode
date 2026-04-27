@@ -5,7 +5,7 @@ import { Readable } from 'stream';
 import { db } from '../db/index.js';
 import { projects } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
-import redis from '../lib/redis.js'; // 🚨 IMPORT REDIS
+import redis from '../lib/redis.js'; 
 
 const app = express();
 const PORT = 8000;
@@ -24,10 +24,38 @@ const s3Client = new S3Client({
 app.use(async (req, res) => {
     try { 
         const hostname = req.hostname;
-        const subdomain = hostname.split('.')[0];
+        const ROOT_DOMAIN = 'yourdomain.com';
 
-        if (subdomain === 'localhost') {
-            return res.status(200).send('Shipnode Edge Network is Online.');
+        let subdomain = null;
+        let isCustomDomain = false;
+
+        // 1. Localhost handling
+        if (hostname === 'localhost') {
+            return res.send('Shipnode Edge Network is Online.');
+        }
+
+        if (hostname.endsWith('.localhost')) {
+            subdomain = hostname.replace('.localhost', '');
+        }
+
+        // 2. Platform subdomains (yourdomain.com)
+        else if (hostname.endsWith(`.${ROOT_DOMAIN}`)) {
+            subdomain = hostname.replace(`.${ROOT_DOMAIN}`, '');
+
+            // Handle www.project123.yourdomain.com
+            if (subdomain.startsWith('www.')) {
+                subdomain = subdomain.slice(4);
+            }
+
+            // Edge case: user visits yourdomain.com directly
+            if (!subdomain || subdomain === ROOT_DOMAIN) {
+                return res.send('Main platform domain');
+            }
+        }
+
+        // 3. Custom domain
+        else {
+            isCustomDomain = true;
         }
 
         let PROJECT_ID;
@@ -43,6 +71,9 @@ app.use(async (req, res) => {
             PROJECT_ID = parsed.projectId;
             DEPLOYMENT_ID = parsed.deploymentId;
         } else {
+            if (!subdomain) {
+                return res.status(400).send('Invalid subdomain');
+            }
             // Redis Miss! Query Postgres (Takes 500 milliseconds)
             const [project] = await db.select()
                 .from(projects)
@@ -64,7 +95,7 @@ app.use(async (req, res) => {
             );
         }
 
-        // --- The rest of your R2 and SPA routing code stays exactly the same ---
+        // --- The rest of R2 and SPA routing code stays exactly the same ---
         const hasExtension = req.path.split('/').pop()?.includes('.');
         let targetPath = req.path;
         if (!hasExtension || req.path === '/') {

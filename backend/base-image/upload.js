@@ -2,34 +2,14 @@ const path = require("path");
 const fs = require("fs");
 const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const mime = require("mime-types");
-const Redis = require("ioredis");
 
+// ENV
 const PROJECT_ID = process.env.PROJECT_ID;
 const DEPLOYMENT_ID = process.env.DEPLOYMENT_ID;
-const ENV_OUTPUT_DIR = process.env.OUTPUT_DIR; 
-const REDIS_URL = process.env.REDIS_URL;
+const ENV_OUTPUT_DIR = process.env.OUTPUT_DIR;
 const BUCKET_NAME = process.env.R2_BUCKET_NAME;
 
-// Redis Publisher for Live Logs
-const publisher = new Redis(REDIS_URL, {
-    maxRetriesPerRequest: 1,
-    retryStrategy: () => null // Stop retrying on connection failure
-});
-
-publisher.on('error', (err) => {
-    // console.warn('Redis Connection Error:', err.message); // Commented to keep logs clean
-});
-
-function publishLog(log) {
-    if(!log) return;
-    try {
-        publisher.publish(`logs:${DEPLOYMENT_ID}`, JSON.stringify({ log: log.toString() }));
-    } catch(err) {
-        // Ignore redis publish errors if it's down
-    }
-}
-
-
+// S3 Client
 const s3Client = new S3Client({
     region: "auto",
     endpoint: process.env.R2_ENDPOINT,
@@ -39,73 +19,129 @@ const s3Client = new S3Client({
     }
 });
 
+// 🔹 Recursively collect files
+function getAllFiles(dir, base = '') {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    let files = [];
+
+    for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        const relativePath = path.join(base, entry.name);
+
+        if (entry.isDirectory()) {
+            files = files.concat(getAllFiles(fullPath, relativePath));
+        } else {
+            files.push(relativePath);
+        }
+    }
+
+    return files;
+}
+
 async function init() {
-    publishLog('Starting Cloudflare R2 Upload Process...');
-    
-    // /home/app/workspace is where main.sh cloned the code
-    // user's ROOT_DIR is where the app actually is inside the repo
+    console.log('Starting Cloudflare R2 Upload Process...');
+
     const rootDir = process.env.ROOT_DIR || "/";
     const basePath = path.join(__dirname, "workspace", rootDir);
 
     let finalOutputDir = ENV_OUTPUT_DIR;
-    let distFolderPath = "";
+    let distFolderPath = finalOutputDir ? path.join(basePath, finalOutputDir) : "";
 
-    // If the user explicitly provided an output directory
-    if (finalOutputDir) {
-        distFolderPath = path.join(basePath, finalOutputDir);
-    } else {
-        
-        const possibleDirs = ["dist", "build", "out", ".next", "public"];
+    // 🔹 Fallback detection
+    if (!finalOutputDir || !fs.existsSync(distFolderPath)) {
+        if (finalOutputDir && finalOutputDir.trim() !== "") {
+            console.log(`Provided output dir '${finalOutputDir}' not found. Falling back...`);
+        }
+
+        const possibleDirs = ["dist", "build", "out", "public"]; // ❌ removed .next
+
         for (const dir of possibleDirs) {
             const possiblePath = path.join(basePath, dir);
             if (fs.existsSync(possiblePath)) {
                 finalOutputDir = dir;
                 distFolderPath = possiblePath;
-                break; 
+                console.log(`Auto-detected output directory: ${finalOutputDir}`);
+                break;
             }
         }
     }
 
+    
     if (!finalOutputDir || !fs.existsSync(distFolderPath)) {
-        publishLog(`Error: Could not find build output directory (tried: dist, build, out, .next, public). Did the build fail?`);
-        console.error(`Directory not found in: ${basePath}`);
+        console.error(`Build output not found.`);
+        console.error(`Checked in: ${basePath}`);
         process.exit(1);
     }
 
-    publishLog(`Uploading missing files from ${finalOutputDir} directory...`);
-
-    // Read all files recursively (requires Node 20+)
-    const distFolderContents = fs.readdirSync(distFolderPath, { recursive: true });
-
-    publishLog(`Uploading ${distFolderContents.length} files...`);
-
-    for (const file of distFolderContents) {
-        const filePath = path.join(distFolderPath, file);
-        if (fs.lstatSync(filePath).isDirectory()) continue;
-
-        // Ensure we upload subfolders correctly (e.g. assets/style.css)
-        // Convert backward slashes to forward slashes for S3 keys on Windows/Linux mix
-        const bucketKey = `outputs/project_${PROJECT_ID}/deploy_${DEPLOYMENT_ID}/${file.replace(/\\/g, '/')}`;
-
-        const command = new PutObjectCommand({
-            Bucket: BUCKET_NAME,
-            Key: bucketKey,
-            Body: fs.createReadStream(filePath),  // Stream the file to handle large files efficiently instead of loading into memory
-            ContentType: mime.lookup(filePath) || 'application/octet-stream'
-        });
-
-        try {
-            await s3Client.send(command);   //just like axios put , since we dont need upload url , this will work fine
-            publishLog(`Uploaded: ${file}`);
-            console.log('uploaded', bucketKey);
-        } catch (error) {
-            publishLog(`Failed to upload ${file}: ${error.message}`);
-            console.error('Upload Error:', error);
+    // 🔹 Angular nested dist fix
+    if (finalOutputDir === "dist") {
+        const subDirs = fs.readdirSync(distFolderPath);
+        if (subDirs.length === 1) {
+            const nested = path.join(distFolderPath, subDirs[0]);
+            if (fs.lstatSync(nested).isDirectory()) {
+                distFolderPath = nested;
+                console.log(`Using nested Angular dist: ${subDirs[0]}`);
+            }
         }
     }
-    
-    publishLog(`Deployment Complete!`);
-    console.log('Done...');
+
+    // 🔹 Validate index.html
+    const indexPath = path.join(distFolderPath, "index.html");
+    if (!fs.existsSync(indexPath)) {
+        console.error("Invalid build: index.html not found");
+        process.exit(1);
+    }
+
+    // 🔹 Collect files
+    const files = getAllFiles(distFolderPath);
+
+    if (files.length === 0) {
+        console.error("Build output is empty");
+        process.exit(1);
+    }
+
+    console.log(`Uploading ${files.length} files from '${finalOutputDir}'...`);
+
+    // 🔹 Upload in batches to prevent EMFILE or R2 Rate Limit errors
+    const CONCURRENCY_LIMIT = 50;
+    let failedUploads = 0;
+
+    for (let i = 0; i < files.length; i += CONCURRENCY_LIMIT) {
+        const batch = files.slice(i, i + CONCURRENCY_LIMIT);
+        
+        await Promise.all(
+            batch.map(async (file) => {
+                const filePath = path.join(distFolderPath, file);
+                const bucketKey = `outputs/project_${PROJECT_ID}/deploy_${DEPLOYMENT_ID}/${file.replace(/\\/g, '/')}`;
+                const isAsset = /\.(js|css|png|jpg|jpeg|svg|gif|woff|woff2)$/.test(file);
+
+                const command = new PutObjectCommand({
+                    Bucket: BUCKET_NAME,
+                    Key: bucketKey,
+                    Body: fs.createReadStream(filePath),
+                    ContentType: mime.lookup(filePath) || 'application/octet-stream',
+                    CacheControl: isAsset
+                        ? 'public, max-age=31536000, immutable'
+                        : 'no-cache'
+                });
+
+                try {
+                    await s3Client.send(command);
+                    console.log(`Uploaded: ${file}`);
+                } catch (error) {
+                    console.error(`Failed: ${file} → ${error.message}`);
+                    failedUploads++;
+                }
+            })
+        );
+    }
+
+    if (failedUploads > 0) {
+        console.error(`Deployment Failed: ${failedUploads} files failed to upload to R2.`);
+        process.exit(1); // Fail the build so the database knows it errored!
+    }
+
+    console.log(`Deployment Complete!`);
     process.exit(0);
 }
 

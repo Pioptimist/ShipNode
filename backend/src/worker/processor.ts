@@ -48,7 +48,16 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
                 `R2_BUCKET_NAME=${ENV.R2_BUCKET_NAME}`
             ],
             HostConfig: {
-                NetworkMode: 'host', 
+                // NetworkMode: 'host', <- REMOVED: Incredibly dangerous, allows container to access host DBs directly.
+                // We securely restrict resources so users can't crash our builder nodes.
+                Memory: 1024 * 1024 * 1024, // 1 GB RAM MAX
+                MemorySwap: 1024 * 1024 * 1024, // 0 Swap (Total memory + swap = Memory)
+                NanoCpus: Math.floor(1.5 * 1000000000), // 1.5 CPU Cores MAX
+                PidsLimit: 60, // Prevent fork bombs (user spawning infinite processes)
+                
+                // Drop all linux capabilities so the container can't escape
+                CapDrop: ['ALL'],
+                Privileged: false,
             }
         });
 
@@ -72,7 +81,16 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
         await container.start();
         
         console.log(`[Worker] Waiting for builder container to finish...`);
-        const result = await container.wait();
+        
+        // Timeout mechanism: 3 minutes maximum build time
+        const MAX_BUILD_TIME = 3 * 60 * 1000;
+        
+        const result = await Promise.race([
+            container.wait(),
+            new Promise<never>((_, reject) => 
+                setTimeout(() => reject(new Error('BUILD_TIMEOUT')), MAX_BUILD_TIME)
+            )
+        ]);
         
         // Wait an extra second for stream to flush
         await new Promise(r => setTimeout(r, 1000));
@@ -135,7 +153,7 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
 
         throw error; // for bullmq to retry or log.
     } finally {
-        // EDGE CASE FIX: ALWAYS destroy the container, even if the build crashed or ESLint failed!
+        // ALWAYS destroy the container, even if the build crashed or ESLint failed
         if (container) {
             try {
                 await container.remove({ force: true });

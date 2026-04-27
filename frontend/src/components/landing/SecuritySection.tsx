@@ -6,27 +6,27 @@ import { Shield, Lock, Eye, FileCheck } from "lucide-react";
 const securityFeatures = [
   {
     icon: Shield,
-    title: "SOC 2 Type II",
-    description: "Independently audited security controls with continuous monitoring.",
+    title: "Web Application Firewall",
+    description: "Reverse-proxy WAF that logs IPs, monitors requests, and automatically enforces Shipnode firewall policies.",
   },
   {
     icon: Lock,
-    title: "End-to-end encryption",
-    description: "AES-256 encryption for data at rest and TLS 1.3 in transit.",
+    title: "Symmetric Encryption",
+    description: "AES-256-GCM encryption secures all GitHub Access Tokens and Deployment Environment Variables at rest.",
   },
   {
     icon: Eye,
-    title: "Zero-trust architecture",
-    description: "Every request is authenticated and authorized. No exceptions.",
+    title: "HMAC Signatures",
+    description: "Constant-time string comparison verifies GitHub Webhook payload signatures, preventing spoofing.",
   },
   {
     icon: FileCheck,
-    title: "GDPR & HIPAA",
-    description: "Full compliance with data protection and healthcare regulations.",
+    title: "Isolated Execution",
+    description: "Docker sandboxes keep your source repository distinct and isolated from the Shipnode core virtual machine host.",
   },
 ];
 
-const certifications = ["SOC 2", "ISO 27001", "HIPAA", "GDPR", "CCPA"];
+const certifications = ["AES-256-GCM", "RSA", "OAuth 2.0", "Redis Pub/Sub", "SSL/TLS 1.3"];
 
 export function SecuritySection() {
   const [isVisible, setIsVisible] = useState(false);

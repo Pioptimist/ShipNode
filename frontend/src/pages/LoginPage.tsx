@@ -1,11 +1,34 @@
 import { FaGithub } from "react-icons/fa"; 
 import { AnimatedWave } from "../components/landing/AnimatedWave";
 import { Button } from "../components/ui/Button";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { ENV } from "../utils/env.ts";
 import { API_PATHS } from "../utils/apiPaths.js";
+import { useAuth } from "../context/useAuth.js";
 
 export default function LoginPage() {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-6">
+        <div className="relative">
+          <div className="absolute -inset-4 bg-foreground/10 blur-xl rounded-full animate-pulse" />
+          <div className="relative w-12 h-12 bg-foreground rounded-lg flex items-center justify-center shadow-2xl animate-bounce">
+            <span className="text-background font-bold font-mono text-xl">S</span>
+          </div>
+        </div>
+        <p className="text-muted-foreground font-mono text-sm tracking-wider uppercase animate-pulse">
+          Authenticating
+        </p>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const handleGithubLogin = () => {
    
     window.location.href = `${ENV.BACKEND_URL}${API_PATHS.AUTH.GITHUB_LOGIN}`; 

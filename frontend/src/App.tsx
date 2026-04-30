@@ -7,6 +7,9 @@ import DashboardLayout from './pages/Dashboard.jsx';
 import ProjectOverview from './pages/ProjectOverview.jsx';
 import ProtectedRoute from './components/auth/ProtectedRoute.jsx';
 import NewProject from './pages/NewProject.jsx';
+import Projects from './pages/Projects.jsx';
+import Deployments from './pages/Deployments.jsx';
+import ImportProject from './pages/ImportProject.jsx';
 
 function App() {
   return (
@@ -19,9 +22,16 @@ function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<ProjectOverview />} />
+          {/* 1. The Index route (loads when you hit /dashboard) */}
+          <Route index element={<Projects />} />
+
+          {/* 2. The Deployments tab (loads when you hit /dashboard/deployments) */}
+          <Route path="deployments" element={<Deployments />} />
+
+          {/* (Future tabs like /dashboard/settings will go here) */}
         </Route>
         <Route path="/new" element={<NewProject />} />
+        <Route path="/import" element={<ImportProject />} />
       </Route>
     </Routes>
   )

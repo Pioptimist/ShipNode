@@ -1,5 +1,6 @@
 import { Search, LayoutGrid, List, Filter, Plus, ChevronDown } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
+import { Link } from "react-router";
 
 export function Topbar() {
   const { user } = useAuth();
@@ -51,12 +52,17 @@ export function Topbar() {
 
           {/* Add New Button */}
           <div className="flex items-center bg-foreground text-background rounded-lg hover:bg-foreground/90 transition-colors cursor-pointer">
-            <button className="px-4 py-2 text-sm font-medium">
-              Add New...
-            </button>
-            <div className="px-2 py-2 border-l border-background/20 hover:bg-background/10 transition-colors rounded-r-lg">
-              <ChevronDown className="w-4 h-4" />
-            </div>
+            <Link
+              to="/import"
+              className="flex items-center bg-foreground text-background rounded-lg hover:bg-foreground/90 transition-colors cursor-pointer"
+            >
+              <button className="px-4 py-2 text-sm font-medium">
+                Add New...
+              </button>
+              <div className="px-2 py-2 border-l border-background/20 hover:bg-background/10 transition-colors rounded-r-lg flex items-center justify-center">
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </Link>
           </div>
         </div>
       </div>

@@ -45,23 +45,22 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
                 `R2_ENDPOINT=${ENV.R2_ENDPOINT}`,
                 `R2_ACCESS_KEY_ID=${ENV.R2_ACCESS_KEY_ID}`,
                 `R2_SECRET_ACCESS_KEY=${ENV.R2_SECRET_ACCESS_KEY}`,
-                `R2_BUCKET_NAME=${ENV.R2_BUCKET_NAME}`
+                `R2_BUCKET_NAME=${ENV.R2_BUCKET_NAME}`,
+                `FORCE_COLOR=1`, 
+                `NPM_CONFIG_COLOR=always`
             ],
             HostConfig: {
-                // NetworkMode: 'host', <- REMOVED: Incredibly dangerous, allows container to access host DBs directly.
-                // We securely restrict resources so users can't crash our builder nodes.
+              
                 Memory: 1024 * 1024 * 1024, // 1 GB RAM MAX
                 MemorySwap: 1024 * 1024 * 1024, // 0 Swap (Total memory + swap = Memory)
                 NanoCpus: Math.floor(1.5 * 1000000000), // 1.5 CPU Cores MAX
-                PidsLimit: 60, // Prevent fork bombs (user spawning infinite processes)
-                
-                // Drop all linux capabilities so the container can't escape
+                PidsLimit: 60, // Prevent fork bombs 
                 CapDrop: ['ALL'],
                 Privileged: false,
             }
         });
 
-        //Attach an output stream to get real-time logs before starting
+        
         const stream = await container.attach({
             stream: true,
             stdout: true,
@@ -81,9 +80,7 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
         await container.start();
         
         console.log(`[Worker] Waiting for builder container to finish...`);
-        
-        // Timeout mechanism: 3 minutes maximum build time
-        const MAX_BUILD_TIME = 3 * 60 * 1000;
+        const MAX_BUILD_TIME = 5 * 60 * 1000;
         
         const result = await Promise.race([
             container.wait(),
@@ -105,12 +102,13 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
         if (result.StatusCode === 0) {
             console.log(`[Worker] SUCCESS! Sandbox exited gracefully.`);
             
-            // 5. Update Deployment Database to SUCCESS
+            const projectStoragePath = `outputs/project_${projectId}/deploy_${deploymentId}`;
             await db.update(deployments)
                 .set({ 
                     status: 'READY',
                     buildLogsUrl: logsUrl,
-                    buildTimeMs: buildTimeMs
+                    buildTimeMs: buildTimeMs,
+                    storagePath: projectStoragePath
                 })
                 .where(eq(deployments.id, Number(deploymentId)));
                 
@@ -129,6 +127,7 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
                 console.log(`[Worker] Purged Edge Cache for: ${activeProject.subdomain}`);
             }
             console.log(`[Worker] Project ${projectId} is now actively serving Deployment ${deploymentId}!`);
+            await redis.publish(`logs:${deploymentId}`, JSON.stringify({ statusUpdate: 'success' }));
                 
         } else {
             throw new Error(`Sandbox exited with fatal Error Code: ${result.StatusCode}`);
@@ -150,7 +149,8 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
                 buildTimeMs: buildTimeMs
             })
             .where(eq(deployments.id, Number(deploymentId))); 
-
+        await redis.publish(`logs:${deploymentId}`, JSON.stringify({ statusUpdate: 'failed' }));
+        
         throw error; // for bullmq to retry or log.
     } finally {
         // ALWAYS destroy the container, even if the build crashed or ESLint failed

@@ -4,12 +4,13 @@ import LandingPage from './pages/LandingPage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import SignupPage from './pages/SignupPage.tsx';
 import DashboardLayout from './pages/Dashboard.jsx';
-import ProjectOverview from './pages/ProjectOverview.jsx';
+
 import ProtectedRoute from './components/auth/ProtectedRoute.jsx';
 import NewProject from './pages/NewProject.jsx';
 import Projects from './pages/Projects.jsx';
 import Deployments from './pages/Deployments.jsx';
 import ImportProject from './pages/ImportProject.jsx';
+import ProjectOverview from './pages/ProjectOverview.jsx';
 
 function App() {
   return (
@@ -32,6 +33,8 @@ function App() {
         </Route>
         <Route path="/new" element={<NewProject />} />
         <Route path="/import" element={<ImportProject />} />
+
+        <Route path="/project/:id" element={<ProjectOverview />} />
       </Route>
     </Routes>
   )

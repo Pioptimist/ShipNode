@@ -93,7 +93,8 @@ export const createProject = async (req: AuthRequest, res: Response) => {
       installCommand: installCommand,
       buildCommand: buildCommand,
       outputDirectory: outputDirectory,
-      domainVerificationToken: domainVerificationToken
+      domainVerificationToken: domainVerificationToken,
+      productionBranch: branch
     }).returning();
 
     

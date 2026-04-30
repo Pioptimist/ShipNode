@@ -1,13 +1,20 @@
 import { Router } from "express";
 import { createProject } from "../controllers/githubController.js"; 
 import { protect } from "../middleware/authMiddleware.js";
-import { deleteProject, getUserProjects } from "../controllers/projectController.js";
+import { deleteProject, getProjectById, getUserProjects, rollbackProject } from "../controllers/projectController.js";
 
 const router = Router();
 
 // POST /api/projects
-// Requires Auth: Yes. We need req.user to tie the project to their account.
+
 router.post("/", protect, createProject);
+
 router.get("/", protect, getUserProjects);
+
 router.delete("/:id", protect, deleteProject);
+
+// GET /api/projects/:id
+router.get("/:id", protect, getProjectById);
+router.post("/:projectId/rollback", protect, rollbackProject);
+
 export default router;

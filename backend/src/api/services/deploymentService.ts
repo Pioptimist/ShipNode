@@ -78,17 +78,12 @@ export const verifyWebhookSignature = (rawBody: Buffer | string, signature: stri
   }
 };
 
-/**
- * 2. The Database Service
- * Finds the project and queues a new deployment.
- */
 export const queueNewDeployment = async (
   repoFullName: string, 
   branch: string, 
   commitHash: string, 
   commitMessage: string
 ) => {
-  // 1. Look up ALL projects in Shipnode using the GitHub repo name (e.g., "soumyodeep/ecommerce")
   const matchingProjects = await db.select().from(projects).where(eq(projects.repoName, repoFullName));
 
   if (matchingProjects.length === 0) {
@@ -97,8 +92,18 @@ export const queueNewDeployment = async (
 
   const queuedDeployments = [];
 
-  // 2. Insert the new deployment into the database queue for EACH matching project
   for (const project of matchingProjects) {
+    
+    const isProduction = branch === project.productionBranch;
+    let previewUrl = null;
+
+    if (!isProduction) {
+      const shortHash = crypto.randomBytes(3).toString("hex");
+      const safeBranchName = branch.replace(/[^a-z0-9]/g, '-');
+      // e.g., "ecommerce-feat-login-9a8b"
+      previewUrl = `${project.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${safeBranchName}-${shortHash}`;
+    }
+
     // 2a. Save to Database
     const [newDeployment] = await db.insert(deployments).values({
       projectId: project.id,
@@ -106,9 +111,10 @@ export const queueNewDeployment = async (
       commitHash: commitHash,
       commitMessage: commitMessage,
       status: "QUEUED",
+      previewUrl: previewUrl 
     }).returning();
     
-    // 2b. Push EXACT job data to BullMQ so the Worker (processor.ts) can process it!
+    // 2b. Push EXACT job data to BullMQ
     await deployQueue.add("deploy-job", {
       projectId: project.id,
       deploymentId: newDeployment.id,
@@ -116,13 +122,15 @@ export const queueNewDeployment = async (
       commitHash: commitHash,
       rootDir: project.rootDirectory || "/", 
       installCmd: project.installCommand || "npm install",
-      buildCmd: project.buildCommand || "npm run build"
+      buildCmd: project.buildCommand || "npm run build",
+      isProduction: isProduction, // Tell the worker how to handle the aftermath
+    
     });
 
     queuedDeployments.push(newDeployment);
   }
 
-  return queuedDeployments; // Return the array of deployments
+  return queuedDeployments;
 };
 
 
@@ -191,7 +199,7 @@ export const deleteR2Directory = async (prefix: string) => {
       
       const listResponse = await s3Client.send(new ListObjectsV2Command(listParams));
 
-      // 2. If we found files, bulk delete them!
+      // If we found files, bulk delete them!
       if (listResponse.Contents && listResponse.Contents.length > 0) {
         const deleteParams = {
           Bucket: ENV.R2_BUCKET_NAME,

@@ -8,7 +8,7 @@ import {
 import axiosInstance from "../utils/axiosInstance";
 import { API_PATHS } from "../utils/apiPaths";
 import { EmptyProjectState } from "../components/dashboard/EmptyProjectState"; 
-import { DeleteProjectModal } from "../components/dashboard/DeleteProjectModal"; // 🚨 Import the Modal
+import { DeleteProjectModal } from "../components/dashboard/DeleteProjectModal"; 
 
 const formatTimeAgo = (dateString) => {
   if (!dateString) return "Just now";
@@ -49,27 +49,25 @@ export default function Projects() {
     fetchProjects();
   }, []);
 
-  // Opens the modal instead of window.confirm
   const handleDeleteClick = (project) => {
     setProjectToDelete(project);
     setIsModalOpen(true);
   };
 
-  // The actual API call fired from inside the Modal
   const executeDelete = async (projectId) => {
     setIsDeleting(true);
     try {
       const res = await axiosInstance.delete(API_PATHS.PROJECTS.DELETE(projectId));
       if (res.data?.success) {
         setProjects((prev) => prev.filter(p => p.id !== projectId));
-        setIsModalOpen(false); // Close modal on success
+        setIsModalOpen(false); 
       }
     } catch (error) {
       console.error("Failed to delete project:", error);
       alert("Failed to delete project. Please try again.");
     } finally {
       setIsDeleting(false);
-      setProjectToDelete(null); // Clean up
+      setProjectToDelete(null); 
     }
   };
 
@@ -104,26 +102,24 @@ export default function Projects() {
               
               <div className="flex items-start justify-between mb-5">
                 <div className="flex items-start gap-4">
-                  <div className="w-8 h-8 rounded-md border border-foreground/20 bg-foreground/5 flex items-center justify-center shrink-0 mt-0.5">
-                              <div className="relative w-10 h-10 rounded-[10px] border border-foreground/10 overflow-hidden bg-foreground/5 shrink-0 mt-0.5 shadow-sm flex items-center justify-center">
-
-                                  {/* Fallback Icon (always renders, but sits behind the image) */}
-                                  <Box className="w-5 h-5 text-foreground/50 absolute" />
-
-                                  {/* Actual Image (covers the box, disappears on error) */}
-                                  <img
-                                      src={`https://www.google.com/s2/favicons?domain=${project.subdomain}.localhost:8000&sz=128`}
-                                      alt={`${project.name} favicon`}
-                                      className="w-full h-full object-cover relative z-10 bg-background"
-                                      onError={(e) => {
-                                          e.target.style.display = 'none';
-                                      }}
-                                  />
-                              </div>
-                  </div>
+                  {/* 🚨 NEW: Wrapped the icon in a Link to the Project Overview */}
+                  <Link to={`/project/${project.id}`} className="w-8 h-8 rounded-md border border-foreground/20 bg-foreground/5 flex items-center justify-center shrink-0 mt-0.5 hover:opacity-80 transition-opacity">
+                      <div className="relative w-10 h-10 rounded-[10px] border border-foreground/10 overflow-hidden bg-foreground/5 shrink-0 shadow-sm flex items-center justify-center">
+                          <Box className="w-5 h-5 text-foreground/50 absolute" />
+                          <img
+                              src={`https://www.google.com/s2/favicons?domain=${project.subdomain}.localhost:8000&sz=128`}
+                              alt={`${project.name} favicon`}
+                              className="w-full h-full object-cover relative z-10 bg-background"
+                              onError={(e) => {
+                                  e.target.style.display = 'none';
+                              }}
+                          />
+                      </div>
+                  </Link>
 
                   <div className="flex flex-col overflow-hidden">
-                    <Link to={`/dashboard/deployments`} className="text-lg font-bold tracking-tight text-foreground truncate hover:underline">
+                    {/* 🚨 NEW: Updated path to point to /project/:id */}
+                    <Link to={`/project/${project.id}`} className="text-lg font-bold tracking-tight text-foreground truncate hover:underline">
                       {project.name}
                     </Link>
                     <a 
@@ -140,7 +136,6 @@ export default function Projects() {
                 <div className="flex items-center gap-3 shrink-0">
                   {StatusIcon}
                   <div className="relative">
-                    {/* 🚨 Opens Modal */}
                     <button 
                       onClick={() => handleDeleteClick(project)}
                       className="text-muted-foreground hover:text-red-500 transition-colors p-1 rounded-md hover:bg-foreground/10"
@@ -186,7 +181,6 @@ export default function Projects() {
         })}
       </div>
 
-    
       <DeleteProjectModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

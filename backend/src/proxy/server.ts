@@ -3,7 +3,7 @@ import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { ENV } from '../lib/env.js';
 import { Readable } from 'stream'; 
 import { db } from '../db/index.js';
-import { projects } from '../db/schema.js';
+import { projects , deployments } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import redis from '../lib/redis.js'; 
 
@@ -24,7 +24,7 @@ const s3Client = new S3Client({
 app.use(async (req, res) => {
     try { 
         const hostname = req.hostname;
-        const ROOT_DOMAIN = 'yourdomain.com';
+        const ROOT_DOMAIN = 'soumyodeep.online';
 
         let subdomain = null;
         let isCustomDomain = false;
@@ -66,7 +66,7 @@ app.use(async (req, res) => {
         const cachedData = await redis.get(`subdomain:${subdomain}`);
 
         if (cachedData) {
-            // Redis Hit! Parse it and skip the Postgres database entirely.
+            
             const parsed = JSON.parse(cachedData);
             PROJECT_ID = parsed.projectId;
             DEPLOYMENT_ID = parsed.deploymentId;
@@ -74,24 +74,39 @@ app.use(async (req, res) => {
             if (!subdomain) {
                 return res.status(400).send('Invalid subdomain');
             }
-            // Redis Miss! Query Postgres (Takes 500 milliseconds)
+
+    
             const [project] = await db.select()
                 .from(projects)
                 .where(eq(projects.subdomain, subdomain));
 
-            if (!project || !project.activeDeploymentId) {
+            
+            const [preview] = await db.select()
+                .from(deployments)
+                .where(eq(deployments.previewUrl, subdomain));
+
+        
+            if (project && project.activeDeploymentId) {
+                // It's the main production site!
+                PROJECT_ID = project.id; 
+                DEPLOYMENT_ID = project.activeDeploymentId;
+            } 
+            else if (preview && preview.status === 'READY') {
+                // It's a preview branch site!
+                PROJECT_ID = preview.projectId;
+                DEPLOYMENT_ID = preview.id;
+            } 
+            else {
+                // It matches nothing, or the preview is still building
                 return res.status(404).send('404: Deployment Not Found or Still Building...');
             }
 
-            PROJECT_ID = project.id; 
-            DEPLOYMENT_ID = project.activeDeploymentId;
-
             // Save the result to Redis for 60 seconds!
-            // This means the JS, CSS, and Image files will load instantly.
             await redis.set(
                 `subdomain:${subdomain}`, 
                 JSON.stringify({ projectId: PROJECT_ID, deploymentId: DEPLOYMENT_ID }), 
-                
+                'EX',
+                60
             );
         }
 

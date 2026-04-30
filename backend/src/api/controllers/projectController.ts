@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { users,deployments, projects, requestLogs, projectEnvs } from "../../db/schema.js";
 import { decryptToken } from "../../utils/crypto.js";
 import { deleteGithubWebhook, deleteR2Directory } from "../services/deploymentService.js";
-
+import redis from "../../lib/redis.js";
 
 export const getUserProjects = async (req: AuthRequest, res: Response) => {
   try {
@@ -49,8 +49,6 @@ export const getUserProjects = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ message: "Failed to fetch projects." });
   }
 };
-
- // Or wherever your decrypt function is
 
 
 export const deleteProject = async (req: AuthRequest, res: Response) => {
@@ -113,5 +111,104 @@ export const deleteProject = async (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error("Delete Project Error:", error);
     return res.status(500).json({ message: "Failed to delete project." });
+  }
+};
+
+
+export const getProjectById = async (req: AuthRequest, res: Response) => {
+  try {
+    const userPayload = req.user;
+    if (!userPayload) {
+      return res.status(401).json({ message: "Unauthorized: Please log in." });
+    }
+
+    const { id } = req.params; // Note: using 'id' instead of 'projectId' to match your route
+
+    if (!id || isNaN(Number(id))) {
+      return res.status(400).json({ message: "Valid Project ID is required." });
+    }
+
+    // 1. Fetch the project
+    const [project] = await db.select()
+      .from(projects)
+      .where(eq(projects.id, Number(id)));
+
+    // 2. Security Checks
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    if (project.userId !== userPayload.id) {
+      return res.status(403).json({ message: "Forbidden: You do not have access to this project." });
+    }
+
+    // 3. Return the data to React
+    return res.status(200).json({
+      success: true,
+      data: project
+    });
+
+  } catch (error: any) {
+    console.error("Fetch Project By ID Error:", error);
+    return res.status(500).json({ message: "Failed to fetch project details." });
+  }
+};
+export const rollbackProject = async (req: AuthRequest, res: Response) => {
+  try {
+    const userPayload = req.user;
+    if (!userPayload) {
+      return res.status(401).json({ message: "Unauthorized: Please log in." });
+    }
+
+    const { projectId } = req.params;
+    const { targetDeploymentId } = req.body;
+
+    if (!targetDeploymentId) {
+      return res.status(400).json({ message: "Target deployment ID is required." });
+    }
+
+    // 1. Verify the project exists and belongs to the user
+    const [project] = await db.select()
+      .from(projects)
+      .where(eq(projects.id, Number(projectId)));
+
+    if (!project || project.userId !== userPayload.id) {
+      return res.status(404).json({ message: "Project not found or unauthorized." });
+    }
+
+    // 2. Verify the target deployment exists, belongs to this project, and is actually READY
+    const [targetDeployment] = await db.select()
+      .from(deployments)
+      .where(eq(deployments.id, Number(targetDeploymentId)));
+
+    if (!targetDeployment || targetDeployment.projectId !== project.id) {
+      return res.status(404).json({ message: "Deployment not found for this project." });
+    }
+
+    if (targetDeployment.status !== "READY") {
+      return res.status(400).json({ message: "Cannot rollback to a deployment that failed or is still building." });
+    }
+
+    // 3. THE MAGIC FLIP: Update the active pointer
+    await db.update(projects)
+      .set({ activeDeploymentId: Number(targetDeploymentId) })
+      .where(eq(projects.id, Number(projectId)));
+
+    // 4. THE CACHE BUST: Force the proxy to read the new activeDeploymentId
+    if (project.subdomain) {
+      await redis.del(`subdomain:${project.subdomain}`);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Rollback successful. The selected deployment is now live.",
+      data: {
+        newActiveDeploymentId: targetDeploymentId
+      }
+    });
+
+  } catch (error: any) {
+    console.error("Rollback Error:", error);
+    return res.status(500).json({ message: "Internal server error during rollback." });
   }
 };

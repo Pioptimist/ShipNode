@@ -16,7 +16,7 @@ const docker = new Docker({
 });
 
 export const processDeploymentJob = async (job: Job<DeployJobData>) => {
-    const { projectId, deploymentId, repoUrl, commitHash, rootDir, installCmd, buildCmd } = job.data;
+    const { projectId, deploymentId, repoUrl, commitHash, rootDir, installCmd, buildCmd , isProduction } = job.data;
     console.log(`[Worker] Started Deployment Job: ${deploymentId} for Project: ${projectId}`);
     
     const logger = new DeploymentLogger(String(projectId), String(deploymentId));
@@ -113,20 +113,24 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
                 .where(eq(deployments.id, Number(deploymentId)));
                 
         
-            await db.update(projects)
-                .set({ activeDeploymentId: Number(deploymentId) })
-                .where(eq(projects.id, Number(projectId)));
-            
-            const [activeProject] = await db.select()
-                .from(projects)
-                .where(eq(projects.id, Number(projectId)));
+            if (isProduction) {
+                await db.update(projects)
+                    .set({ activeDeploymentId: Number(deploymentId) })
+                    .where(eq(projects.id, Number(projectId)));
+                
+                const [activeProject] = await db.select()
+                    .from(projects)
+                    .where(eq(projects.id, Number(projectId)));
 
-            if (activeProject?.subdomain) {
-                // del the key since code was changed.
-                await redis.del(`subdomain:${activeProject.subdomain}`);
-                console.log(`[Worker] Purged Edge Cache for: ${activeProject.subdomain}`);
+                if (activeProject?.subdomain) {
+                    // del the key since code was changed.
+                    await redis.del(`subdomain:${activeProject.subdomain}`);
+                    console.log(`[Worker] Purged Edge Cache for: ${activeProject.subdomain}`);
+                }
+                console.log(`[Worker] Project ${projectId} is now actively serving Production Deployment ${deploymentId}!`);
+            } else {
+                console.log(`[Worker] Preview branch built safely. Production site is completely untouched.`);
             }
-            console.log(`[Worker] Project ${projectId} is now actively serving Deployment ${deploymentId}!`);
             await redis.publish(`logs:${deploymentId}`, JSON.stringify({ statusUpdate: 'success' }));
                 
         } else {

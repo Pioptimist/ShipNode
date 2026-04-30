@@ -5,18 +5,23 @@ import { projects, deployments } from "../../db/schema.js";
 import { ENV } from "../../lib/env.js";
 import axios from "axios";
 import { deployQueue } from "../../lib/queue.js"; // <-- ADDED THIS IMPORT
+import { S3Client, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 
-import { decryptToken } from "../../utils/crypto.js"; // Your decryption function
+const s3Client = new S3Client({
+    region: "auto",
+    endpoint: ENV.R2_ENDPOINT,
+    credentials: {
+        accessKeyId: ENV.R2_ACCESS_KEY_ID,
+        secretAccessKey: ENV.R2_SECRET_ACCESS_KEY
+    }
+});
 
 export const createGithubWebhook = async (
-  encryptedGithubToken: string, 
+  githubToken: string, 
   repoOwner: string, 
   repoName: string
 ) => {
-  // 1. Decrypt the token so we can talk to GitHub
-  const githubToken = decryptToken(encryptedGithubToken);
-
-  // 2. Where should GitHub send the payload? (Must be an ngrok URL for local testing!)
+  // 1. Where should GitHub send the payload? (Must be an ngrok URL for local testing!)
   const webhookUrl = `${ENV.WEBHOOK_PROXY_URL}/api/webhooks/github`;
 
   try {
@@ -35,7 +40,7 @@ export const createGithubWebhook = async (
       },
       {
         headers: {
-          Authorization: `Bearer ${githubToken}`,
+          Authorization: `Bearer ${githubToken}`, // <-- Just pass it straight to Axios
           Accept: "application/vnd.github.v3+json"
         }
       }
@@ -118,4 +123,91 @@ export const queueNewDeployment = async (
   }
 
   return queuedDeployments; // Return the array of deployments
+};
+
+
+export const deleteGithubWebhook = async (
+  githubToken: string, 
+  repoOwner: string, 
+  repoName: string
+) => {
+  const targetUrl = `${ENV.WEBHOOK_PROXY_URL}/api/webhooks/github`;
+
+  try {
+    const { data: hooks } = await axios.get(
+      `https://api.github.com/repos/${repoOwner}/${repoName}/hooks`,
+      {
+        headers: {
+          Authorization: `Bearer ${githubToken}`,
+          Accept: "application/vnd.github.v3+json"
+        }
+      }
+    );
+
+    const shipnodeHook = hooks.find((hook: any) => hook.config.url === targetUrl);
+
+    if (shipnodeHook) {
+      await axios.delete(
+        `https://api.github.com/repos/${repoOwner}/${repoName}/hooks/${shipnodeHook.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${githubToken}`,
+            Accept: "application/vnd.github.v3+json"
+          }
+        }
+      );
+      console.log(`Successfully removed Shipnode webhook from ${repoOwner}/${repoName}`);
+    }
+  } catch (error: any) {
+    // 🚨 Extract the exact GitHub API error message
+    const errorMsg = error.response?.data?.message || error.message;
+    console.error(`Failed to clean up webhook for ${repoName}:`, errorMsg);
+    
+    // 🚨 THROW the error so the controller catches it!
+    throw new Error(`GitHub API Error: ${errorMsg}`); 
+  }
+};
+
+
+
+
+/**
+ * Recursively deletes all files in an R2 bucket under a specific prefix (folder)
+ */
+export const deleteR2Directory = async (prefix: string) => {
+  if (!prefix) return;
+
+  try {
+    let isTruncated = true;
+    let continuationToken: string | undefined;
+
+    while (isTruncated) {
+      // 1. Find all files inside this folder
+      const listParams = {
+        Bucket: ENV.R2_BUCKET_NAME,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      };
+      
+      const listResponse = await s3Client.send(new ListObjectsV2Command(listParams));
+
+      // 2. If we found files, bulk delete them!
+      if (listResponse.Contents && listResponse.Contents.length > 0) {
+        const deleteParams = {
+          Bucket: ENV.R2_BUCKET_NAME,
+          Delete: {
+            Objects: listResponse.Contents.map((file) => ({ Key: file.Key })),
+          },
+        };
+        await s3Client.send(new DeleteObjectsCommand(deleteParams));
+      }
+
+      isTruncated = listResponse.IsTruncated ?? false;
+      continuationToken = listResponse.NextContinuationToken;
+    }
+    console.log(`Successfully deleted R2 directory: ${prefix}`);
+  } catch (error) {
+    console.error(`Failed to delete R2 directory ${prefix}:`, error);
+    throw error; // We throw so the controller knows it failed
+  }
 };

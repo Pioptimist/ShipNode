@@ -7,7 +7,7 @@ import { createGithubWebhook,verifyWebhookSignature, queueNewDeployment } from "
 import crypto from "crypto";
 import axios from "axios";
 import { decryptToken } from "../../utils/crypto.js";
-import { fetchRepoContentsService } from "../services/githubService.js";
+import { fetchRepoContentsService, fetchRepoBranchesService } from "../services/githubService.js";
 
 export const getUserRepositories = async (req: AuthRequest, res: Response) => {
   try {
@@ -55,7 +55,6 @@ export const getUserRepositories = async (req: AuthRequest, res: Response) => {
 
 export const createProject = async (req: AuthRequest, res: Response) => {
   try {
-    
     const userPayload = req.user; 
     if (!userPayload) {
         return res.status(401).json({ message: "Unauthorized: Please log in." });
@@ -109,7 +108,10 @@ export const createProject = async (req: AuthRequest, res: Response) => {
     const githubToken = decryptToken(dbUser.githubAccessToken);
 
     // Ask GitHub for the latest commit on the selected branch
+    // Ask GitHub for the latest commit on the selected branch
     let commitResponse;
+    let newlyQueuedDeploymentId = null;
+
     try {
       commitResponse = await axios.get(
         `https://api.github.com/repos/${repoOwner}/${repoName}/commits/${branch}`,
@@ -120,21 +122,31 @@ export const createProject = async (req: AuthRequest, res: Response) => {
           }
         }
       );
-    } catch (err: any) {
-      console.error(`Failed to fetch initial commit for branch '${branch}':`, err.response?.data?.message || err.message);
-    }
 
-    if (commitResponse) {
       const latestCommitSha = commitResponse.data.sha;
       const latestCommitMessage = commitResponse.data.commit.message;
 
       // Queue it up in the database so the Docker worker starts immediately
-      await queueNewDeployment(
+      const queuedDeployments = await queueNewDeployment(
         `${repoOwner}/${repoName}`, 
         branch, 
         latestCommitSha, 
         latestCommitMessage || "Initial deployment via Shipnode"
       );
+
+      // Extract the ID to send to the frontend
+      if (queuedDeployments && queuedDeployments.length > 0) {
+        newlyQueuedDeploymentId = queuedDeployments[0].id;
+      }
+
+    } catch (err: any) {
+      
+      await db.delete(projects).where(eq(projects.id, newProject.id));
+      
+      return res.status(400).json({ 
+        success: false,
+        message: `Could not find branch '${branch}' on GitHub. (Is your repo empty, or is the branch named 'master'?)` 
+      });
     }
 
     // Call GitHub and attach the Webhook
@@ -147,11 +159,14 @@ export const createProject = async (req: AuthRequest, res: Response) => {
       throw webhookError; 
     }
 
-
+    
     return res.status(201).json({
       success: true,
       message: "Project created and webhook attached successfully.",
-      data: newProject
+      data: {
+          project: newProject,
+          deploymentId: newlyQueuedDeploymentId // React needs this for the redirect!
+      }
     });
 
   } catch (error: any) {
@@ -218,7 +233,7 @@ export const getRepoContents = async (req: AuthRequest, res: Response) => {
     }
 
     // Since this is a GET request, we take data from req.query, not req.body
-    const { repoOwner, repoName, path = "" } = req.query;
+    const { repoOwner, repoName, path = "", branch = "" } = req.query;
 
     if (!repoOwner || !repoName) {
       return res.status(400).json({ message: "Repository owner and name are required." });
@@ -229,7 +244,8 @@ export const getRepoContents = async (req: AuthRequest, res: Response) => {
       userPayload.id,
       repoOwner as string,
       repoName as string,
-      path as string
+      path as string,
+      branch as string
     );
 
     return res.status(200).json({
@@ -246,5 +262,42 @@ export const getRepoContents = async (req: AuthRequest, res: Response) => {
     }
 
     return res.status(500).json({ message: "Failed to fetch repository contents." });
+  }
+};
+
+
+export const getRepoBranches = async (req: AuthRequest, res: Response) => {
+  try {
+    const userPayload = req.user;
+    if (!userPayload) {
+      return res.status(401).json({ message: "Unauthorized: Please log in." });
+    }
+
+    const { repoOwner, repoName } = req.query;
+
+    if (!repoOwner || !repoName) {
+      return res.status(400).json({ message: "Repository owner and name are required." });
+    }
+
+    const branches = await fetchRepoBranchesService(
+      userPayload.id,
+      repoOwner as string,
+      repoName as string
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: branches
+    });
+
+  } catch (error: any) {
+    console.error("Get Repo Branches Error:", error);
+
+    // Handle specific errors thrown by the Service
+    if (error.message === "GITHUB_AUTH_FAILED") {
+      return res.status(403).json({ message: "GitHub token missing or expired. Please re-authenticate." });
+    }
+
+    return res.status(500).json({ message: "Failed to fetch repository branches." });
   }
 };

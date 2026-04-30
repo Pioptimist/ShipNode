@@ -10,9 +10,8 @@ import authRoutes from "./routes/authRoutes.js";
 import githubRoutes from "./routes/githubRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
 import webhookRoutes from "./routes/webhookRoutes.js";
-
-// 🚨 2. IMPORT YOUR NEW SOCKET HANDLER
 import { initializeSockets } from "./socket/socket.js"; 
+import deploymentRoutes from "./routes/deploymentRoutes.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -48,6 +47,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/github", githubRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/webhooks", webhookRoutes);
+app.use("/api/deployments", deploymentRoutes);
 
 const startServer = async () => {
   try {

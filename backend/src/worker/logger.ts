@@ -15,17 +15,29 @@ export class DeploymentLogger {
     private logsBuffer: string = '';
     private projectId: string;
     private deploymentId: string;
+    private secretsToMask: string[]; // 🚨 NEW: The Hitlist
 
-    constructor(projectId: string, deploymentId: string) {
+    // Default to an empty array so older calls don't break
+    constructor(projectId: string, deploymentId: string, secretsToMask: string[] = []) {
         this.projectId = projectId;
         this.deploymentId = deploymentId;
+        this.secretsToMask = secretsToMask;
     }
 
     public appendLog(chunk: string | Buffer) {
-        const textChunk = chunk.toString('utf8');
+        let textChunk = chunk.toString('utf8');
+
+        // 🚨 THE SHIELD: Scrub the text before it touches the buffer or Redis
+        if (this.secretsToMask.length > 0) {
+            for (const secret of this.secretsToMask) {
+                // split().join() is the safest way to replace strings containing special characters
+                textChunk = textChunk.split(secret).join('[SECURE_ENV_HIDDEN]');
+            }
+        }
+
         this.logsBuffer += textChunk;
         
-        // Publish real-time chunk to Redis so API Socket servers can broadcast it
+        // Publish real-time *scrubbed* chunk to Redis so API Socket servers can broadcast it
         redis.publish(`logs:${this.deploymentId}`, JSON.stringify({ log: textChunk })).catch(() => {
             // Ignore Redis publish failures to prevent crashing the worker
         });

@@ -19,7 +19,7 @@ const s3Client = new S3Client({
     }
 });
 
-// 🔹 Recursively collect files
+// Recursively collect files
 function getAllFiles(dir, base = '') {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     let files = [];
@@ -49,11 +49,13 @@ async function init() {
 
     // 🔹 Fallback detection
     if (!finalOutputDir || !fs.existsSync(distFolderPath)) {
+        // fs.existsSync is used here to check if the provided output directory exists
         if (finalOutputDir && finalOutputDir.trim() !== "") {
+            // the above check is when user gave smth as output dir , even if he gave " ",since it doesnt exist we show them this
             console.log(`Provided output dir '${finalOutputDir}' not found. Falling back...`);
         }
 
-        const possibleDirs = ["dist", "build", "out", "public"]; // ❌ removed .next
+        const possibleDirs = ["dist", "build", "out", "public"]; 
 
         for (const dir of possibleDirs) {
             const possiblePath = path.join(basePath, dir);
@@ -73,7 +75,7 @@ async function init() {
         process.exit(1);
     }
 
-    // 🔹 Angular nested dist fix
+    // 🔹 Angular nested dist fix , angular by default makes a dist/abc/index.html , so we check if the inner stuff in dist is 1 or no.
     if (finalOutputDir === "dist") {
         const subDirs = fs.readdirSync(distFolderPath);
         if (subDirs.length === 1) {
@@ -119,6 +121,7 @@ async function init() {
                     Bucket: BUCKET_NAME,
                     Key: bucketKey,
                     Body: fs.createReadStream(filePath),
+                    // send in stream instead of whole file.
                     ContentType: mime.lookup(filePath) || 'application/octet-stream',
                     CacheControl: isAsset
                         ? 'public, max-age=31536000, immutable'

@@ -108,3 +108,48 @@ export const getAllUserDeployments = async (req: AuthRequest, res: Response) => 
     return res.status(500).json({ message: "Failed to fetch deployments." });
   }
 };
+
+
+
+export const getProjectDeployments = async (req: AuthRequest, res: Response) => {
+  try {
+    const userPayload = req.user;
+    if (!userPayload) {
+      return res.status(401).json({ message: "Unauthorized: Please log in." });
+    }
+
+    const { projectId } = req.params;
+
+    if (!projectId || isNaN(Number(projectId))) {
+      return res.status(400).json({ message: "Valid Project ID is required." });
+    }
+
+    // 1. SECURITY CHECK: Ensure the project actually belongs to this user!
+    const [project] = await db.select()
+      .from(projects)
+      .where(eq(projects.id, Number(projectId)));
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    if (project.userId !== userPayload.id) {
+      return res.status(403).json({ message: "Forbidden: You do not have access to this project." });
+    }
+
+    // 2. Fetch the deployment history, newest first!
+    const projectDeployments = await db.select()
+      .from(deployments)
+      .where(eq(deployments.projectId, Number(projectId)))
+      .orderBy(desc(deployments.createdAt));
+
+    return res.status(200).json({ 
+      success: true, 
+      data: projectDeployments 
+    });
+
+  } catch (error) {
+    console.error("Fetch Project Deployments Error:", error);
+    return res.status(500).json({ message: "Failed to fetch project deployments." });
+  }
+};

@@ -5,7 +5,7 @@ import { redis } from './redis.js';
 export const deployQueue = new Queue('deployments', {
     connection: redis,
     defaultJobOptions: {
-        attempts: 3, 
+        attempts: 1, 
         backoff: {
             type: 'exponential',
             delay: 3000, // Waits 3s, then 9s, then 27s
@@ -24,4 +24,6 @@ export interface DeployJobData {
     rootDir: string;
     installCmd: string;
     buildCmd: string;
+    isProduction: boolean;
+    
 }

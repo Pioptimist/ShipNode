@@ -7,7 +7,8 @@ import { deployments , projects} from '../db/schema.js';
 import { eq } from "drizzle-orm";
 import redis from '../lib/redis.js'; 
 import { DeploymentLogger } from './logger.js';
-
+import { decryptToken } from '../utils/crypto.js';
+import { projectEnvs } from '../db/schema.js';
 // Connect to the local Windows Docker Engine (or Linux socket)
 const docker = new Docker({
     socketPath: process.platform === 'win32'
@@ -15,14 +16,48 @@ const docker = new Docker({
         : '/var/run/docker.sock'
 });
 
+const IGNORE_MASKING = new Set(["production", "development", "test", "staging", "true", "false", "0", "1", "yes", "no"]);
+
 export const processDeploymentJob = async (job: Job<DeployJobData>) => {
-    const { projectId, deploymentId, repoUrl, commitHash, rootDir, installCmd, buildCmd } = job.data;
+    const { projectId, deploymentId, repoUrl, commitHash, rootDir, installCmd, buildCmd , isProduction } = job.data;
     console.log(`[Worker] Started Deployment Job: ${deploymentId} for Project: ${projectId}`);
     
-    const logger = new DeploymentLogger(String(projectId), String(deploymentId));
     let startTime = Date.now();
     let container: Docker.Container | null = null;
+    
+    const dockerEnvArray: string[] = [];
+    const secretsToMask: string[] = [];
 
+    try {
+        const envRecords = await db.select().from(projectEnvs).where(eq(projectEnvs.projectId, Number(projectId)));
+
+        // Filter variables based on whether this is a Production push or a Preview branch
+        const targetEnv = isProduction ? 'PRODUCTION' : 'PREVIEW';
+        const activeEnvs = envRecords.filter(e => e.target === 'ALL' || e.target === targetEnv);
+
+        for (const env of activeEnvs) {
+            try {
+                const decryptedValue = decryptToken(env.value);
+
+                // Format for Docker: "KEY=VALUE"
+                dockerEnvArray.push(`${env.key}=${decryptedValue}`);
+
+                // Add to masking hitlist if it's long enough and not a generic word
+                if (decryptedValue.length >= 4 && !IGNORE_MASKING.has(decryptedValue.toLowerCase())) {
+                    secretsToMask.push(decryptedValue);
+                }
+            } catch (err) {
+                console.error(`[Worker] Failed to decrypt env var: ${env.key}`, err);
+                // We deliberately skip this variable rather than crashing the whole build,
+                // but you could throw here if you want strict "fail secure" behavior.
+            }
+        }
+    } catch (dbErr) {
+        console.error(`[Worker] Failed to fetch env vars for project ${projectId}`, dbErr);
+    }
+
+    // 🚨 2. INITIALIZE LOGGER WITH THE SECRET HITLIST
+    const logger = new DeploymentLogger(String(projectId), String(deploymentId), secretsToMask);
     try {
         // Update the database to show it's actively building!
         await db.update(deployments)
@@ -34,6 +69,7 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
         container = await docker.createContainer({
             Image: 'shipnode-builder',
             Env: [
+                ...dockerEnvArray,
                 `REPO_URL=${repoUrl}`,
                 `COMMIT_HASH=${commitHash}`,
                 `ROOT_DIR=${rootDir}`,
@@ -113,20 +149,24 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
                 .where(eq(deployments.id, Number(deploymentId)));
                 
         
-            await db.update(projects)
-                .set({ activeDeploymentId: Number(deploymentId) })
-                .where(eq(projects.id, Number(projectId)));
-            
-            const [activeProject] = await db.select()
-                .from(projects)
-                .where(eq(projects.id, Number(projectId)));
+            if (isProduction) {
+                await db.update(projects)
+                    .set({ activeDeploymentId: Number(deploymentId) })
+                    .where(eq(projects.id, Number(projectId)));
+                
+                const [activeProject] = await db.select()
+                    .from(projects)
+                    .where(eq(projects.id, Number(projectId)));
 
-            if (activeProject?.subdomain) {
-                // del the key since code was changed.
-                await redis.del(`subdomain:${activeProject.subdomain}`);
-                console.log(`[Worker] Purged Edge Cache for: ${activeProject.subdomain}`);
+                if (activeProject?.subdomain) {
+                    // del the key since code was changed.
+                    await redis.del(`subdomain:${activeProject.subdomain}`);
+                    console.log(`[Worker] Purged Edge Cache for: ${activeProject.subdomain}`);
+                }
+                console.log(`[Worker] Project ${projectId} is now actively serving Production Deployment ${deploymentId}!`);
+            } else {
+                console.log(`[Worker] Preview branch built safely. Production site is completely untouched.`);
             }
-            console.log(`[Worker] Project ${projectId} is now actively serving Deployment ${deploymentId}!`);
             await redis.publish(`logs:${deploymentId}`, JSON.stringify({ statusUpdate: 'success' }));
                 
         } else {

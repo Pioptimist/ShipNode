@@ -14,7 +14,13 @@ export const API_PATHS = {
   PROJECTS: {
     CREATE: "/api/projects",
     GET_ALL: "/api/projects",               
-    DELETE: (id) => `/api/projects/${id}`,   
+    GET_ONE: (id) => `/api/projects/${id}`,
+     
+    ROLLBACK: (id) => `/api/projects/${id}/rollback`, 
+    DELETE: (id) => `/api/projects/${id}`,  
+    GET_ENVS: (id) => `/api/projects/${id}/envs`,
+    ADD_ENV: (id) => `/api/projects/${id}/envs`,
+    DELETE_ENV: (projectId, envId) => `/api/projects/${projectId}/envs/${envId}`, 
   },
   WEBHOOKS: {
     GITHUB: "/api/webhooks/github",
@@ -22,6 +28,7 @@ export const API_PATHS = {
   DEPLOYMENTS: {
     GET_ALL: "/api/deployments",  
     GET_STATUS: (id) => `/api/deployments/${id}`,
+    GET_DEPLOYMENTS: (id) => `/api/deployments/${id}/deployments`,
     GET_LOGS: (id) => `/api/deployments/${id}/logs`,
   },
 };

@@ -2,13 +2,13 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middleware/authMiddleware.js";
 import { db } from "../../db/index.js";
 import { eq } from "drizzle-orm"; // added eq import
-import { users, projects } from "../../db/schema.js";
+import { users, projects, projectEnvs } from "../../db/schema.js";
 import { createGithubWebhook,verifyWebhookSignature, queueNewDeployment } from "../services/deploymentService.js";
 import crypto from "crypto";
 import axios from "axios";
 import { decryptToken } from "../../utils/crypto.js";
 import { fetchRepoContentsService, fetchRepoBranchesService } from "../services/githubService.js";
-
+import { encryptToken } from "../../utils/crypto.js"; 
 export const getUserRepositories = async (req: AuthRequest, res: Response) => {
   try {
     const userPayload = req.user;
@@ -93,10 +93,21 @@ export const createProject = async (req: AuthRequest, res: Response) => {
       installCommand: installCommand,
       buildCommand: buildCommand,
       outputDirectory: outputDirectory,
-      domainVerificationToken: domainVerificationToken
+      domainVerificationToken: domainVerificationToken,
+      productionBranch: branch
     }).returning();
 
-    
+    const incomingEnvs = req.body.envs || [];
+    if (incomingEnvs.length > 0) {
+      const envsToInsert = incomingEnvs.map((env: any) => ({
+        projectId: newProject.id,
+        key: env.key.trim(),
+        value: encryptToken(env.value), // Encrypt it for the vault!
+        target: "ALL"
+      }));
+      
+      await db.insert(projectEnvs).values(envsToInsert);
+    }
     const [dbUser] = await db.select().from(users).where(eq(users.id, userPayload.id));
     
     if (!dbUser || !dbUser.githubAccessToken) {

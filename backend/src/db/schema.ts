@@ -25,7 +25,7 @@ export const projects = pgTable("projects", {
   domainVerificationToken: varchar("domain_verification_token", { length: 255 }),
   // The Instant Rollback Pointer (Which deployment is currently live?)
   activeDeploymentId: integer("active_deployment_id"), // Can be null when project is first created
-  
+  productionBranch: varchar("production_branch", { length: 255 }).default("main"),
   // Build Config
   repoName: varchar("repo_name", { length: 255 }).notNull(), 
   // Add this to your projects schema

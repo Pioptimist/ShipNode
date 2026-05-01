@@ -6,7 +6,7 @@ import { io } from "socket.io-client";
 import { ENV } from "../utils/env.ts";
 import { 
   ArrowLeft, GitBranch, ChevronDown, ChevronRight,
-  Loader2, Folder, File, X,
+  Loader2, Folder, File, X, Plus, Minus, Upload,
   Terminal, CheckCircle2, Globe, Clock, GitCommit, ExternalLink, XCircle, LayoutDashboard 
 } from "lucide-react";
 import axiosInstance from "../utils/axiosInstance";
@@ -34,9 +34,13 @@ export default function NewProject() {
   const [branches, setBranches] = useState([]);
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
 
+  // 🚨 --- Environment Variables State ---
+  const [envVars, setEnvVars] = useState([{ key: "", value: "" }]);
+  const [showEnvVars, setShowEnvVars] = useState(false);
+  const fileInputRef = useRef(null);
+
   // --- UI State ---
   const [isDeploying, setIsDeploying] = useState(false);
-  const [showBuildSettings, setShowBuildSettings] = useState(false);
   const [error, setError] = useState("");
   
   // --- Modal State ---
@@ -58,9 +62,8 @@ export default function NewProject() {
   // --- REFS ---
   const logsEndRef = useRef(null);
   const deploymentSectionRef = useRef(null);
-  const logsHeaderRef = useRef(null); // 🚨 Ref for the Accordion auto-scroll
+  const logsHeaderRef = useRef(null);
 
-  // --- 🔄 REFRESH PERSISTENCE LOGIC ---
   useEffect(() => {
     if (deploymentId) {
       setTimeout(() => {
@@ -69,7 +72,6 @@ export default function NewProject() {
     }
   }, []);
 
-  // --- FETCH BRANCHES ON MOUNT ---
   useEffect(() => {
     if (!repoOwner || !repoName) return;
     const fetchBranches = async () => {
@@ -86,14 +88,12 @@ export default function NewProject() {
     fetchBranches();
   }, [repoOwner, repoName]);
 
-  // Auto-scroll terminal
   useEffect(() => {
     if (isLogsOpen) {
       logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [logs, isLogsOpen]);
 
-  // Fetch Directory Contents
   const fetchDirectory = async (path = "") => {
     setIsLoadingContents(true);
     setExplorerContents([]);
@@ -107,17 +107,69 @@ export default function NewProject() {
   const handleNavigateDir = (newPath) => { setExplorerPath(newPath); fetchDirectory(newPath); };
   const handleSelectDir = () => { setRootDirectory(explorerPath || "./"); setIsExplorerOpen(false); };
 
+  // 🚨 --- Env Var Handlers ---
+  const handleEnvChange = (index, field, value) => {
+    const newEnvs = [...envVars];
+    newEnvs[index][field] = value;
+    setEnvVars(newEnvs);
+  };
+
+  const handleAddEnv = () => setEnvVars([...envVars, { key: "", value: "" }]);
+  
+  const handleRemoveEnv = (index) => {
+    if (envVars.length === 1) return setEnvVars([{ key: "", value: "" }]);
+    setEnvVars(envVars.filter((_, i) => i !== index));
+  };
+
+  const handleImportEnv = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target.result;
+      const lines = content.split('\n');
+      const parsedEnvs = [];
+      
+      lines.forEach(line => {
+        // Match KEY=VALUE, ignoring comments and empty lines
+        const match = line.match(/^([^#=]+)=(.*)$/);
+        if (match) {
+          parsedEnvs.push({ key: match[1].trim(), value: match[2].trim() });
+        }
+      });
+
+      if (parsedEnvs.length > 0) {
+        const existingEnvs = envVars.filter(env => env.key.trim() || env.value.trim());
+        setEnvVars([...existingEnvs, ...parsedEnvs]);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = null; // Reset input
+  };
+
   // --- Submit Handler ---
   const handleDeploy = async () => {
     setIsDeploying(true);
     setError("");
 
     try {
-      const payload = { repoOwner, repoName, branch, framework, rootDirectory, installCommand, buildCommand, outputDirectory };
+      // 1. Filter the envs right here
+      const validEnvs = envVars.filter(env => env.key.trim() && env.value.trim());
+
+      // 2. Attach them to the main payload!
+      const payload = { 
+        repoOwner, repoName, branch, framework, rootDirectory, 
+        installCommand, buildCommand, outputDirectory,
+        envs: validEnvs // 🚨 ADDED HERE
+      };
+      
       const response = await axiosInstance.post(API_PATHS.PROJECTS.CREATE, payload);
       
       if (response.data.success) {
         const newId = response.data.data.deploymentId;
+
+        // 🚨 REMOVED THE Promise.all() LOOP COMPLETELY
+
         if (newId) {
           setSearchParams({ repo: repoName, deploy: newId }, { replace: true });
           setDeploymentId(newId);
@@ -133,12 +185,9 @@ export default function NewProject() {
     } 
   };
 
-  // 🚨 SMART TOGGLE LOGS FUNCTION
   const handleToggleLogs = () => {
     const willOpen = !isLogsOpen;
     setIsLogsOpen(willOpen);
-    
-    // Wait for the accordion CSS transition to begin, then scroll smoothly
     setTimeout(() => {
       if (willOpen) {
         logsHeaderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -164,17 +213,12 @@ export default function NewProject() {
             setIsDeploying(false);
             setIsLogsOpen(false); 
             
-            // 🚨 FIXED: Robust historical logs parser for raw strings
             try {
               const logsRes = await axiosInstance.get(API_PATHS.DEPLOYMENTS.GET_LOGS(deploymentId));
               let pastLogs = [];
-              
-              // If backend sends plain string text
               if (typeof logsRes.data === 'string') {
                 pastLogs = logsRes.data.split('\n');
-              } 
-              // If backend wraps it in { data: "..." }
-              else if (logsRes.data?.data) {
+              } else if (logsRes.data?.data) {
                 pastLogs = typeof logsRes.data.data === 'string' ? logsRes.data.data.split('\n') : logsRes.data.data;
               }
 
@@ -204,7 +248,6 @@ export default function NewProject() {
     if (!deploymentId || deploymentStatus === "READY" || deploymentStatus === "FAILED") return;
 
     const socket = io(ENV.BACKEND_URL, { withCredentials: true });
-
     socket.on("connect", () => { socket.emit("subscribe-to-logs", deploymentId); });
 
     socket.on("build-log", (rawMessage) => {
@@ -238,7 +281,6 @@ export default function NewProject() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background overflow-x-hidden scroll-smooth">
-      {/* Topbar */}
       <nav className="sticky top-0 z-30 h-14 border-b border-foreground/10 bg-background/80 backdrop-blur-md px-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -320,6 +362,82 @@ export default function NewProject() {
                   <button onClick={handleOpenExplorer} className="absolute right-1 top-1 bottom-1 px-3 bg-foreground/5 hover:bg-foreground/10 rounded text-xs border border-foreground/10">Edit</button>
                 </div>
               </div>
+
+              {/* 🚨 ENVIRONMENT VARIABLES ACCORDION 🚨 */}
+              <div className="border border-foreground/10 rounded-md overflow-hidden">
+                <button
+                  onClick={() => setShowEnvVars(!showEnvVars)}
+                  className="w-full flex items-center justify-between p-4 bg-[#0a0a0a] hover:bg-foreground/5 transition-colors"
+                >
+                  <span className="text-sm font-medium">Environment Variables</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showEnvVars ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {showEnvVars && (
+                  <div className="p-4 bg-[#000000] space-y-4 border-t border-foreground/10 animate-in fade-in duration-200">
+                    {envVars.map((env, idx) => (
+                      <div key={idx} className="flex items-start gap-3">
+                        <div className="flex-1 space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">Key</label>
+                          <input
+                            type="text"
+                            placeholder="EXAMPLE_NAME"
+                            value={env.key}
+                            onChange={(e) => handleEnvChange(idx, 'key', e.target.value)}
+                            className="w-full bg-[#0a0a0a] border border-foreground/10 rounded-md px-3 py-2 text-sm outline-none focus:border-foreground/30 font-mono transition-colors"
+                          />
+                        </div>
+                        <div className="flex-1 space-y-1.5">
+                          <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">Value</label>
+                          <input
+                            type="text"
+                            placeholder="I9JU23NF394R6HH"
+                            value={env.value}
+                            onChange={(e) => handleEnvChange(idx, 'value', e.target.value)}
+                            className="w-full bg-[#0a0a0a] border border-foreground/10 rounded-md px-3 py-2 text-sm outline-none focus:border-foreground/30 font-mono transition-colors"
+                          />
+                        </div>
+                        <div className="pt-[22px]">
+                          <button
+                            onClick={() => handleRemoveEnv(idx)}
+                            className="p-2 border border-foreground/10 rounded-md hover:bg-foreground/10 text-muted-foreground hover:text-foreground transition-colors"
+                            title="Remove"
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <div className="flex items-center pt-2">
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="file" 
+                          accept=".env,text/plain"
+                          ref={fileInputRef}
+                          onChange={handleImportEnv}
+                          className="hidden" 
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-3 py-1.5 border border-foreground/10 bg-[#0a0a0a] rounded-md hover:bg-foreground/10 text-sm font-medium transition-colors"
+                        >
+                          Import .env
+                        </button>
+                        <span className="text-xs text-muted-foreground hidden sm:inline">or paste the .env contents</span>
+                      </div>
+                      
+                      <button
+                        onClick={handleAddEnv}
+                        className="px-3 py-1.5 border border-foreground/10 bg-[#0a0a0a] rounded-md hover:bg-foreground/10 text-sm font-medium transition-colors flex items-center gap-1.5 ml-auto"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add More
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
             </div>
 
             <div className="p-8 border-t border-foreground/10 bg-foreground/[0.02]">
@@ -331,21 +449,19 @@ export default function NewProject() {
         </div>
       </div>
 
-      {/* --- PAGE 2: DEPLOYMENT STATUS (Smaller & Centered layout) --- */}
+      {/* --- PAGE 2: DEPLOYMENT STATUS --- */}
+      {/* ... [Rest of the file remains exactly the same] ... */}
       {deploymentId && (
         <div ref={deploymentSectionRef} className="p-6 lg:p-10 max-w-4xl mx-auto w-full flex flex-col gap-6 min-h-[calc(100vh-3.5rem)] pb-20 animate-in fade-in slide-in-from-bottom-8 duration-700">
           
           {isLoadingDetails ? (
-            /* 🚨 LOADING SKELETONS */
             <>
               <div className="w-full h-[450px] bg-[#0a0a0a] border border-foreground/5 rounded-xl animate-pulse"></div>
               <div className="w-full h-32 bg-[#0a0a0a] border border-foreground/5 rounded-xl animate-pulse"></div>
               <div className="w-full h-14 bg-[#0a0a0a] border border-foreground/5 rounded-xl animate-pulse"></div>
             </>
           ) : (
-            /* 🚨 LOADED UI */
             <>
-              {/* 1. Live Preview - Now max-w-4xl, slightly shorter, centered nicely */}
               <div className="bg-[#0a0a0a] border border-foreground/10 rounded-xl overflow-hidden shadow-2xl flex flex-col h-[450px] w-full relative group transition-all duration-500">
                 <div className="p-3 border-b border-foreground/10 flex items-center gap-2 bg-foreground/[0.02]">
                   <Globe className="w-4 h-4 text-muted-foreground" />
@@ -384,7 +500,6 @@ export default function NewProject() {
                 )}
               </div>
 
-              {/* 2. Status Card */}
               <div className="bg-[#0a0a0a] border border-foreground/10 rounded-xl p-6 shadow-sm w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
                   {deploymentStatus === "BUILDING" || deploymentStatus === "QUEUED" ? (
@@ -432,7 +547,6 @@ export default function NewProject() {
                 )}
               </div>
 
-              {/* 3. Logs Accordion Dropdown (With smart auto-scroll!) */}
               <div ref={logsHeaderRef} className="bg-[#0a0a0a] border border-foreground/10 rounded-xl shadow-xl flex flex-col overflow-hidden w-full transition-all duration-300">
                 <div 
                   onClick={handleToggleLogs}

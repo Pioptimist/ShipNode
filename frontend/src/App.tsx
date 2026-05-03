@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import LandingPage from './pages/LandingPage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import SignupPage from './pages/SignupPage.tsx';
-import DashboardLayout from './pages/AppLayout.jsx';
 
 import ProtectedRoute from './components/auth/ProtectedRoute.jsx';
 import NewProject from './pages/NewProject.jsx';

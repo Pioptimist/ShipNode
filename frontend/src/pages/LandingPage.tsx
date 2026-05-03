@@ -1,4 +1,4 @@
-import React from 'react'
+
 import Hero from '../components/landing/Hero'
 import { FeaturesSection } from '../components/landing/Feature'
 import { HowItWorksSection } from '../components/landing/HowItWorks'

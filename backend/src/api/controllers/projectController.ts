@@ -198,6 +198,9 @@ export const rollbackProject = async (req: AuthRequest, res: Response) => {
     if (project.subdomain) {
       await redis.del(`subdomain:${project.subdomain}`);
     }
+    if (project.customDomain) {
+      await redis.del(`domain:${project.customDomain}`);
+    }
 
     return res.status(200).json({
       success: true,

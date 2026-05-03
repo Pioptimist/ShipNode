@@ -12,6 +12,7 @@ import projectRoutes from "./routes/projectRoutes.js";
 import webhookRoutes from "./routes/webhookRoutes.js";
 import { initializeSockets } from "./socket/socket.js"; 
 import deploymentRoutes from "./routes/deploymentRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -22,7 +23,7 @@ initializeSockets(server);
 app.use(
   cors({
     origin: ["http://localhost:5173"], 
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE","PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true, 
   })
@@ -48,6 +49,7 @@ app.use("/api/github", githubRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/deployments", deploymentRoutes);
+app.use("/api/users", userRoutes);
 
 const startServer = async () => {
   try {

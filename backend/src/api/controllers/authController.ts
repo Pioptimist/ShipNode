@@ -5,7 +5,7 @@ import { AuthRequest } from "../middleware/authMiddleware.js";
 import jwt from "jsonwebtoken";
 import { generateAccessToken } from "../../utils/jwt.js";
 import { db } from "../../db/index.js";
-import { eq } from "drizzle-orm"; // added eq import
+import { and, eq, ne } from "drizzle-orm"; // added eq import
 import { users } from "../../db/schema.js";
 
 export const githubLogin = (req: Request, res: Response) => {
@@ -102,7 +102,7 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
       throw new Error("User no longer exists");
     }
 
-    // 🚨 FIX: Pass the full user object to the generator
+   
     const newAccessToken = generateAccessToken(user);
 
     // Ensure your cookie options are consistent with your other controllers
@@ -133,4 +133,110 @@ export const logout = (req: Request, res: Response) => {
   res.clearCookie("accessToken", { secure: true, sameSite: "lax", httpOnly: true });
   res.clearCookie("refreshToken", { secure: true, sameSite: "lax", httpOnly: true });
   return res.status(200).json({ success: true, message: "Logged out successfully" });
+};
+
+
+export const checkUsername = async (req: Request, res: Response) => {
+    try {
+        const { username } = req.query;
+
+        if (!username || typeof username !== "string") {
+            return res.status(400).json({ success: false, message: "Username query parameter is required." });
+        }
+
+        // Clean the input exactly like the frontend and the PATCH controller do
+        const cleanUsername = username.toLowerCase().replace(/[^a-z0-9-]/g, '');
+
+        if (cleanUsername.length < 3) {
+            return res.status(200).json({ success: true, available: false, message: "Username too short." });
+        }
+
+        // Ask the database if this username exists anywhere
+        const [existingUser] = await db.select()
+            .from(users)
+            .where(eq(users.username, cleanUsername));
+
+        if (existingUser) {
+            return res.status(200).json({ success: true, available: false }); // Taken
+        }
+
+        return res.status(200).json({ success: true, available: true }); // Available!
+
+    } catch (error) {
+        console.error("Check Username Error:", error);
+        return res.status(500).json({ success: false, message: "Server error" });
+    }
+};
+
+export const updateProfile = async (req: AuthRequest, res: Response) => {
+    try {
+        const userPayload = req.user;
+        if (!userPayload) {
+            return res.status(401).json({ success: false, message: "Unauthorized" });
+        }
+
+        const { displayName, username, avatarUrl } = req.body;
+
+        // Initialize an empty object to hold ONLY the fields being updated
+        const updatePayload: Partial<{ name: string; username: string; avatarUrl: string }> = {};
+
+        if (displayName !== undefined) {
+            updatePayload.name = displayName;
+        }
+
+        if (avatarUrl !== undefined) {
+            updatePayload.avatarUrl = avatarUrl;
+        }
+
+        if (username !== undefined) {
+            const cleanUsername = username.toLowerCase().replace(/[^a-z0-9-]/g, '');
+            
+            // SECURITY: Ask the DB if this username exists on ANY row where the ID is NOT the current user's ID
+            const [existingUser] = await db.select()
+                .from(users)
+                .where(
+                    and(
+                        eq(users.username, cleanUsername),
+                        ne(users.id, userPayload.id) 
+                    )
+                );
+
+            if (existingUser) {
+                return res.status(409).json({ success: false, message: "Username is already taken." });
+            }
+            
+            updatePayload.username = cleanUsername;
+        }
+
+        // Prevent empty database calls if they clicked save without changing anything
+        if (Object.keys(updatePayload).length === 0) {
+            return res.status(400).json({ success: false, message: "No fields provided to update." });
+        }
+
+        // Execute the dynamic update
+        await db.update(users)
+            .set(updatePayload)
+            .where(eq(users.id, userPayload.id));
+
+        // Fetch the fresh data to return to the frontend
+        const [updatedUser] = await db.select()
+            .from(users)
+            .where(eq(users.id, userPayload.id));
+
+        return res.status(200).json({ 
+            success: true, 
+            message: "Profile updated successfully",
+            data: {
+                id: updatedUser.id,
+                username: updatedUser.username,
+                name: updatedUser.name,
+                email: updatedUser.email,
+                avatarUrl: updatedUser.avatarUrl,
+            }
+        });
+
+    } catch (error) {
+        console.error("Update Profile Error:", error);
+        return res.status(500).json({ success: false, message: "Failed to update profile." });
+    }
 };

@@ -109,17 +109,40 @@ export function Sidebar() {
       </nav>
 
       {/* BOTTOM USER AREA (Stays exactly the same) */}
-      <div className="p-4 border-t border-foreground/10">
-        <button onClick={logout} className="flex items-center gap-3 w-full hover:bg-foreground/5 p-2 rounded-lg transition-colors">
-          <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-foreground/10">
-            {user?.avatarUrl ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" /> : <span className="font-mono text-xs uppercase">{user?.username?.[0] || "U"}</span>}
+      <div className="p-4 border-t border-foreground/10 flex items-center justify-between gap-1">
+        
+        {/* User Info & Logout Button */}
+        <button 
+          onClick={logout} 
+          className="flex items-center gap-3 flex-1 hover:bg-foreground/5 p-2 rounded-lg transition-colors overflow-hidden group"
+          title="Click to logout"
+        >
+          <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-foreground/10 shrink-0">
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+            ) : (
+              <span className="font-mono text-xs uppercase">{user?.username?.[0] || "U"}</span>
+            )}
           </div>
           <div className="flex flex-col flex-1 text-left truncate">
-            <span className="font-medium text-sm truncate">{user?.username || "Guest User"}</span>
-            <span className="text-[10px] text-muted-foreground truncate">{user?.email || "No email"}</span>
+            {/* 🚨 Prioritize Display Name (name), fallback to username */}
+            <span className="font-medium text-sm truncate group-hover:text-red-500 transition-colors">
+              {user?.name || user?.username || "Guest User"}
+            </span>
+            <span className="text-[10px] text-muted-foreground truncate">
+              {user?.email || "No email"}
+            </span>
           </div>
-          <Settings className="w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
         </button>
+
+        {/* 🚨 Settings Gear Icon - Now independent and routable! */}
+        <Link 
+          to="/dashboard/settings/general"
+          className="p-2 text-muted-foreground hover:text-foreground hover:bg-foreground/5 rounded-lg transition-colors shrink-0"
+          title="Settings"
+        >
+          <Settings className="w-4 h-4" />
+        </Link>
       </div>
     </aside>
   );

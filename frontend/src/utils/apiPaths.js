@@ -6,6 +6,10 @@ export const API_PATHS = {
     LOGOUT: "/api/auth/logout",
     GET_ME: "/api/auth/me",
   },
+  USERS: {
+    CHECK_USERNAME: (username) => `/api/users/check-username?username=${username}`,
+    UPDATE_PROFILE: "/api/users/profile",
+  },
   GITHUB: {
     GET_REPOS: "/api/github/repos",
     GET_CONTENTS: "/api/github/contents",
@@ -21,6 +25,10 @@ export const API_PATHS = {
     GET_ENVS: (id) => `/api/projects/${id}/envs`,
     ADD_ENV: (id) => `/api/projects/${id}/envs`,
     DELETE_ENV: (projectId, envId) => `/api/projects/${projectId}/envs/${envId}`, 
+
+    ADD_DOMAIN: (id) => `/api/projects/${id}/domain`,
+    VERIFY_DOMAIN: (id) => `/api/projects/${id}/domain/verify`,
+    REMOVE_DOMAIN: (id) => `/api/projects/${id}/domain`,
   },
   WEBHOOKS: {
     GITHUB: "/api/webhooks/github",

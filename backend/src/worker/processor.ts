@@ -163,6 +163,10 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
                     await redis.del(`subdomain:${activeProject.subdomain}`);
                     console.log(`[Worker] Purged Edge Cache for: ${activeProject.subdomain}`);
                 }
+                if (activeProject?.customDomain) {
+                    await redis.del(`domain:${activeProject.customDomain}`);
+                    console.log(`[Worker] Purged Edge Cache for Custom Domain: ${activeProject.customDomain}`);
+                }
                 console.log(`[Worker] Project ${projectId} is now actively serving Production Deployment ${deploymentId}!`);
             } else {
                 console.log(`[Worker] Preview branch built safely. Production site is completely untouched.`);

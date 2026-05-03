@@ -7,6 +7,25 @@ export function Topbar({ searchQuery, setSearchQuery }) {
   const location = useLocation();
 
   const isProjectView = location.pathname.startsWith('/project/');
+  
+  // Dynamic Breadcrumb Logic
+  const getBreadcrumb = () => {
+    const path = location.pathname;
+    
+    if (isProjectView) {
+      // e.g. /project/123/settings -> "Settings"
+      const parts = path.split('/');
+      const section = parts[3] || 'Overview'; 
+      return { main: "Project", sub: section.charAt(0).toUpperCase() + section.slice(1) };
+    } else {
+      // e.g. /dashboard/domains -> "Domains"
+      const parts = path.split('/');
+      const section = parts[2] || 'Projects';
+      return { main: section.charAt(0).toUpperCase() + section.slice(1), sub: null };
+    }
+  };
+
+  const breadcrumbs = getBreadcrumb();
 
   return (
     <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-foreground/10">
@@ -14,13 +33,15 @@ export function Topbar({ searchQuery, setSearchQuery }) {
         <div className="flex items-center gap-2 text-sm font-medium">
           <span className="text-muted-foreground mr-1">{user?.username}</span>
           <span className="text-muted-foreground">/</span>
-          <span className={isProjectView ? "text-muted-foreground" : "text-foreground"}>
-            Projects
+          
+          <span className={breadcrumbs.sub ? "text-muted-foreground" : "text-foreground"}>
+            {breadcrumbs.main}
           </span>
-          {isProjectView && (
+
+          {breadcrumbs.sub && (
             <>
               <span className="text-muted-foreground">/</span>
-              <span className="text-foreground">Overview</span>
+              <span className="text-foreground">{breadcrumbs.sub}</span>
             </>
           )}
         </div>

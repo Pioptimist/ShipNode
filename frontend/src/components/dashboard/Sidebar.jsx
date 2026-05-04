@@ -19,7 +19,7 @@ export function Sidebar() {
   const location = useLocation();
   const { user, logout } = useAuth();
   
-  // 🚨 SMART LOGIC: Are we inside a project?
+  
   const isProjectView = location.pathname.startsWith('/project/');
   const projectId = isProjectView ? location.pathname.split('/')[2] : null;
 
@@ -125,7 +125,7 @@ export function Sidebar() {
             )}
           </div>
           <div className="flex flex-col flex-1 text-left truncate">
-            {/* 🚨 Prioritize Display Name (name), fallback to username */}
+          
             <span className="font-medium text-sm truncate group-hover:text-red-500 transition-colors">
               {user?.name || user?.username || "Guest User"}
             </span>
@@ -135,7 +135,7 @@ export function Sidebar() {
           </div>
         </button>
 
-        {/* 🚨 Settings Gear Icon - Now independent and routable! */}
+     
         <Link 
           to="/dashboard/settings/general"
           className="p-2 text-muted-foreground hover:text-foreground hover:bg-foreground/5 rounded-lg transition-colors shrink-0"

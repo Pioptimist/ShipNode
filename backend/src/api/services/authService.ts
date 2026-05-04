@@ -71,9 +71,12 @@ export const handleGithubCallback = async (code: string) => {
         .values({ githubId, email, username, avatarUrl, githubAccessToken: encryptedToken })
         .returning();
     } else {
-      // Update with username & avatar so it stays fresh if they change their GitHub picture
+      // only set avatarUrl if user has no avatar yet
+      const updatePayload: any = { githubAccessToken: encryptedToken, username };
+      if (!user.avatarUrl) updatePayload.avatarUrl = avatarUrl;
+
       [user] = await db.update(users)
-        .set({ githubAccessToken: encryptedToken, username, avatarUrl })
+        .set(updatePayload)
         .where(eq(users.githubId, githubId))
         .returning();
     }

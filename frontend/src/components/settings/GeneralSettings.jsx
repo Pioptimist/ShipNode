@@ -31,6 +31,8 @@ export default function GeneralSettings() {
   // 🚨 SMART BUTTON STATE: Replaces the ugly Toast
   const [saveState, setSaveState] = useState({ section: null, status: "idle" }); 
 
+  
+
   // Real Backend Debounce for Username check
   useEffect(() => {
     if (username === user?.username) {

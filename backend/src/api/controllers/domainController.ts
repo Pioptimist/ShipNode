@@ -195,3 +195,27 @@ export const removeCustomDomain = async (req: AuthRequest, res: Response) => {
         return res.status(500).json({ success: false, message: "Failed to remove domain." });
     }
 };
+
+export const checkDomainForCaddy = async (req: Request, res: Response) => {
+    // Caddy passes the domain exactly like: ?domain=demo.shipnode.soumyodeep.online
+    const domainToCheck = req.query.domain as string;
+
+    if (!domainToCheck) return res.status(400).send("No domain provided");
+
+    // 1. Auto-Approve ALL your platform preview subdomains
+    if (domainToCheck.endsWith(".shipnode.soumyodeep.online")) {
+        return res.status(200).send("OK"); // Tell Caddy to issue the SSL!
+    }
+
+    // 2. Otherwise, check the DB for custom domains
+    const [project] = await db.select()
+        .from(projects)
+        .where(eq(projects.customDomain, domainToCheck));
+
+    if (project && project.domainVerified) {
+        return res.status(200).send("OK"); // Valid Custom Domain!
+    }
+
+    // 3. Reject the SSL certificate issuance
+    return res.status(404).send("Not Found"); 
+};

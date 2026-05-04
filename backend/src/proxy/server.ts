@@ -63,13 +63,11 @@ app.use(async (req, res) => {
     
     try { 
         let hostname = req.hostname;
-        const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'soumyodeep.online';
+        const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'shipnode.soumyodeep.online';
         const PLATFORM_DOMAINS = [
-            'soumyodeep.online',
-            'www.soumyodeep.online',
-            'test.soumyodeep.online',
-            // 'shipnode.com',
-            // 'www.shipnode.com'
+            'shipnode.soumyodeep.online',
+            'www.shipnode.soumyodeep.online',
+            'test.shipnode.soumyodeep.online',
         ];
 
         let subdomain: string | null = null;

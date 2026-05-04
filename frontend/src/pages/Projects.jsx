@@ -109,7 +109,7 @@ export default function Projects() {
               const status = latestDeploy?.status || "UNKNOWN";
               const isReady = status === "READY";
               const isFailed = status === "FAILED";
-              const liveUrl = `http://${project.subdomain}.localhost:8000`; 
+              const liveUrl = `https://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`;
               
               let StatusIcon = <div className="w-6 h-6 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin" title="Building" />;
               if (isReady) StatusIcon = <CheckCircle2 className="w-6 h-6 text-green-500" title="Ready" />;
@@ -124,7 +124,7 @@ export default function Projects() {
                           <div className="relative w-10 h-10 rounded-[10px] border border-foreground/10 overflow-hidden bg-foreground/5 shrink-0 shadow-sm flex items-center justify-center">
                               <Box className="w-5 h-5 text-foreground/50 absolute" />
                               <img
-                                  src={`https://www.google.com/s2/favicons?domain=${project.subdomain}.localhost:8000&sz=128`}
+                                  src={`https://www.google.com/s2/favicons?domain=${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}&sz=128`}
                                   alt={`${project.name} favicon`}
                                   className="w-full h-full object-cover relative z-10 bg-background"
                                   onError={(e) => {
@@ -144,7 +144,7 @@ export default function Projects() {
                           rel="noopener noreferrer"
                           className="text-sm text-muted-foreground hover:text-foreground transition-colors truncate"
                         >
-                          {project.subdomain}.localhost
+                          {project.subdomain}.{import.meta.env.VITE_PLATFORM_DOMAIN}
                         </a>
                       </div>
                     </div>

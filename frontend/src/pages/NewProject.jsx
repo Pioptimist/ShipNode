@@ -277,7 +277,7 @@ export default function NewProject() {
     };
   }, [deploymentId, deploymentStatus]);
 
-  const liveUrl = deploymentData?.subdomain ? `http://${deploymentData.subdomain}.localhost:8000` : "#";
+  const liveUrl = deploymentData?.subdomain ? `https://${deploymentData.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}` : "#";
 
   return (
     <div className="flex flex-col min-h-screen bg-background overflow-x-hidden scroll-smooth">
@@ -520,7 +520,7 @@ export default function NewProject() {
                     <span className="text-xs text-muted-foreground uppercase tracking-wider font-mono">Domains</span>
                     {deploymentStatus === "READY" ? (
                       <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-400 hover:underline flex items-center gap-1.5">
-                        {deploymentData?.subdomain}.localhost:8000 <ExternalLink className="w-3 h-3" />
+                        {deploymentData?.subdomain}.{import.meta.env.VITE_PLATFORM_DOMAIN} <ExternalLink className="w-3 h-3" />
                       </a>
                     ) : (
                       <span className="text-sm text-muted-foreground italic">Assigning...</span>

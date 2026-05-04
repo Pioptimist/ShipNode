@@ -64,7 +64,7 @@ export default function ProjectOverview() {
 
   const activeDeployment = deployments.find(d => d.id === project.activeDeploymentId);
   const previewDeployments = deployments.filter(d => d.id !== project.activeDeploymentId);
-  const prodUrl = `http://${project.subdomain}.localhost:8000`;
+  const prodUrl = `https://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`; ;
 
   return (
     // 🚨 Notice how we removed min-h-screen and the background color! 
@@ -118,7 +118,7 @@ export default function ProjectOverview() {
             <div>
               <p className="text-sm text-muted-foreground mb-1">Deployment</p>
               <a href={prodUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium hover:underline text-foreground">
-                {project.subdomain}.localhost:8000
+                {project.subdomain}.{import.meta.env.VITE_PLATFORM_DOMAIN} 
               </a>
             </div>
             
@@ -198,7 +198,7 @@ export default function ProjectOverview() {
                   {/* Safely implemented your ternary fix! */}
                   {dep.status === "READY" ? (
                       dep.previewUrl ? (
-                        <a href={`http://${dep.previewUrl}.localhost:8000`} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1 text-xs border border-foreground/10 rounded hover:bg-foreground/10 transition-colors flex items-center gap-1.5">
+                        <a href={`https://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1 text-xs border border-foreground/10 rounded hover:bg-foreground/10 transition-colors flex items-center gap-1.5">
                           <ExternalLink className="w-3 h-3" /> Preview
                         </a>
                       ) : (

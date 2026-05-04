@@ -34,7 +34,7 @@ export function ProjectSelector({ projects, onSelect }) {
                 <div className="flex flex-col text-left">
                   <p className="text-sm font-medium text-foreground">{project.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {project.customDomain ? project.customDomain : `${project.subdomain}.localhost`}
+                    {project.customDomain ? project.customDomain : `${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`}
                   </p>
                 </div>
               </div>

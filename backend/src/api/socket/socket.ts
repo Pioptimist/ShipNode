@@ -7,7 +7,7 @@ export const initializeSockets = (server: HttpServer) => {
   // 1. Attach Socket.io to the HTTP Server
   const io = new SocketIOServer(server, {
     cors: {
-      origin: ["http://localhost:5173"], // Must match your React Vite frontend exactly
+      origin: [ENV.FRONTEND_URL,"http://localhost:5173"], // Must match your React Vite frontend exactly
       methods: ["GET", "POST"],
       credentials: true,
     },

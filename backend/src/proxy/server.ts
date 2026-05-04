@@ -9,6 +9,7 @@ import redis from '../lib/redis.js';
 import rateLimit from 'express-rate-limit';
 import { isValidDomain } from '../utils/domain-validator.js'; 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = 8000;
 
 

@@ -7,3 +7,4 @@ notes.frontend.txt
 notes.frontend
 .aidesigner/*
 !.aidesigner/.gitkeep
+.github/skills/aidesigner-frontend/

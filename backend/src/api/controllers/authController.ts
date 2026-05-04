@@ -61,6 +61,7 @@ export const getMe = async (req: AuthRequest, res: Response) => {
       id: users.id,
       githubId: users.githubId,
       email: users.email,
+      name: users.name,
       username: users.username,
       avatarUrl: users.avatarUrl
     }).from(users).where(eq(users.id, req.user.id));

@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { eq, and, ne } from "drizzle-orm";
 import dns from "dns/promises"; // Node's native DNS module!
 import { db } from "../../db/index.js";
-import { projects } from "../../db/schema.js";
+import { projects, deployments } from "../../db/schema.js";
 import { AuthRequest } from "../middleware/authMiddleware.js";
 import redis from "../../lib/redis.js";
 // --- Helper to clean up user input ---
@@ -213,12 +213,44 @@ export const checkDomainForCaddy = async (req: Request, res: Response) => {
 
     if (!domainToCheck) return res.status(400).send("No domain provided");
 
-    // 1. Auto-Approve ALL your platform preview subdomains
-    if (domainToCheck.endsWith(".shipnode.soumyodeep.online")) {
-        return res.status(200).send("OK"); // Tell Caddy to issue the SSL!
+    const ROOT_DOMAIN = 'shipnode.soumyodeep.online';
+    const PLATFORM_DOMAINS = [
+        ROOT_DOMAIN,
+        `www.${ROOT_DOMAIN}`,
+        `test.${ROOT_DOMAIN}`
+    ];
+
+    // 1. Is it the main platform domain or a predefined one?
+    if (PLATFORM_DOMAINS.includes(domainToCheck)) {
+        return res.status(200).send("OK");
     }
 
-    // 2. Otherwise, check the DB for custom domains
+    // 2. Is it a platform subdomain?
+    if (domainToCheck.endsWith(`.${ROOT_DOMAIN}`)) {
+        const subdomain = domainToCheck.replace(`.${ROOT_DOMAIN}`, '');
+
+        // Check if this project subdomain exists
+        const [projectBySubdomain] = await db.select()
+            .from(projects)
+            .where(eq(projects.subdomain, subdomain));
+
+        if (projectBySubdomain) {
+            return res.status(200).send("OK");
+        }
+
+        // Check if this preview URL exists
+        const [preview] = await db.select()
+            .from(deployments)
+            .where(eq(deployments.previewUrl, subdomain));
+
+        if (preview) {
+            return res.status(200).send("OK");
+        }
+        
+        return res.status(404).send("Not Found");
+    }
+
+    // 3. Otherwise, check the DB for custom domains
     const [project] = await db.select()
         .from(projects)
         .where(eq(projects.customDomain, domainToCheck));
@@ -227,6 +259,6 @@ export const checkDomainForCaddy = async (req: Request, res: Response) => {
         return res.status(200).send("OK"); // Valid Custom Domain!
     }
 
-    // 3. Reject the SSL certificate issuance
+    // 4. Reject the SSL certificate issuance requests from randos
     return res.status(404).send("Not Found"); 
 };

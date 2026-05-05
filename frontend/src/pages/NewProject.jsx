@@ -344,14 +344,38 @@ export default function NewProject() {
                 <input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} className="w-full bg-background border border-foreground/10 rounded-md px-3 py-2 text-sm outline-none" />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Framework Preset</label>
-                <div className="flex items-center justify-between w-full bg-background border border-foreground/10 rounded-md px-3 py-2 text-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded bg-foreground/5 flex items-center justify-center"><div className="w-2 h-2 rounded-full bg-muted-foreground" /></div>
-                    <span>{framework === "VITE" ? "Vite / React" : framework}</span>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Framework Preset</label>
+                  <div className="relative">
+                    <select 
+                      value={framework}
+                      onChange={(e) => setFramework(e.target.value)}
+                      className="w-full bg-background border border-foreground/10 rounded-md px-3 py-2 text-sm outline-none appearance-none"
+                    >
+                      <option value="VITE">Vite / React</option>
+                      <option value="NEXTJS">Next.js</option>
+                      <option value="VANILLA">Vanilla HTML/JS/CSS</option>
+                    </select>
+                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
                   </div>
-                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Output Directory</label>
+                    <input type="text" value={outputDirectory} onChange={(e) => setOutputDirectory(e.target.value)} className="w-full bg-background border border-foreground/10 rounded-md px-3 py-2 text-sm outline-none font-mono" placeholder="e.g. dist or ." />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Install Command</label>
+                    <input type="text" value={installCommand} onChange={(e) => setInstallCommand(e.target.value)} className="w-full bg-background border border-foreground/10 rounded-md px-3 py-2 text-sm outline-none font-mono" placeholder="e.g. npm install" />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Build Command</label>
+                    <input type="text" value={buildCommand} onChange={(e) => setBuildCommand(e.target.value)} className="w-full bg-background border border-foreground/10 rounded-md px-3 py-2 text-sm outline-none font-mono" placeholder="e.g. npm run build" />
+                  </div>
                 </div>
               </div>
 

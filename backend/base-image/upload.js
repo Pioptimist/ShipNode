@@ -47,6 +47,11 @@ async function init() {
     let finalOutputDir = ENV_OUTPUT_DIR;
     let distFolderPath = finalOutputDir ? path.join(basePath, finalOutputDir) : "";
 
+    // Handle Vanilla HTML/JS that might point to outputDirectory as "."
+    if (finalOutputDir === '.' || finalOutputDir === './') {
+        distFolderPath = basePath;
+    }
+
     // 🔹 Fallback detection
     if (!finalOutputDir || !fs.existsSync(distFolderPath)) {
         // fs.existsSync is used here to check if the provided output directory exists

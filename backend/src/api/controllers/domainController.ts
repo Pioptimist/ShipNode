@@ -91,12 +91,23 @@ export const verifyCustomDomain = async (req: AuthRequest, res: Response) => {
        
         let txtRecords: string[][] = [];
         try {
-            console.log(`[DNS] Checking TXT records for ${project.customDomain}...`);
-            txtRecords = await dns.resolveTxt(project.customDomain);
+            const prefixedDomain = `_shipnode.${project.customDomain}`;
+            console.log(`[DNS] Checking TXT records for ${prefixedDomain}...`);
+            try {
+                txtRecords = await dns.resolveTxt(prefixedDomain);
+            } catch (err: any) {
+                // If the prefixed check fails, fall back to checking the root domain
+                // just in case they added it directly to an A-record domain.
+                if (err.code === 'ENOTFOUND' || err.code === 'ENODATA') {
+                    console.log(`[DNS] Falling back: Checking TXT records for ${project.customDomain}...`);
+                    txtRecords = await dns.resolveTxt(project.customDomain);
+                } else {
+                    throw err;
+                }
+            }
         } catch (dnsError: any) {
-            // ENOTFOUND or ENODATA just means they haven't set up the records yet
             if (dnsError.code === 'ENOTFOUND' || dnsError.code === 'ENODATA') {
-                return res.status(400).json({ message: "No TXT records found on this domain. Have you added them to your registrar?" });
+                return res.status(400).json({ message: "No TXT records found. Have you added them to your registrar? (It may take a few minutes to propagate)" });
             }
             throw dnsError; 
         }

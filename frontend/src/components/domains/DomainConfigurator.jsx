@@ -194,15 +194,17 @@ export function DomainConfigurator({ project, onBack }) {
                     <div>
                       <div className="flex text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
                         <div className="w-24">Type</div>
-                        <div className="w-24">Name</div>
+                        <div className="w-48">Name</div>
                         <div className="flex-1">Value</div>
                       </div>
                       <div className="flex items-center bg-background border border-foreground/10 rounded-lg p-2.5 font-mono text-sm">
-                        <div className="w-24">TXT</div>
-                        <div className="w-24">@</div>
-                        <div className="flex-1 flex items-center justify-between truncate">
-                          <span className="truncate mr-4">{verificationToken}</span>
-                          <button onClick={() => copyToClipboard(verificationToken)} className="text-muted-foreground hover:text-foreground">
+                        <div className="w-24 font-semibold">TXT</div>
+                        <div className="w-48 truncate pr-4" title={`_shipnode${customDomain.split('.').length > 2 ? `.${customDomain.split('.').slice(0, -2).join('.')}` : ''}`}>
+                            _shipnode{customDomain.split('.').length > 2 ? `.${customDomain.split('.').slice(0, -2).join('.')}` : ''}
+                        </div>
+                        <div className="flex-1 flex items-center justify-between min-w-0">
+                          <span className="truncate mr-4 text-foreground/80">{verificationToken}</span>
+                          <button onClick={() => copyToClipboard(verificationToken)} className="text-muted-foreground hover:text-foreground shrink-0">
                             <Copy className="w-4 h-4" />
                           </button>
                         </div>
@@ -210,12 +212,21 @@ export function DomainConfigurator({ project, onBack }) {
                     </div>
 
                     {/* Routing Record */}
-                    <div>
+                    <div className="pt-2 border-t border-foreground/10">
+                      <div className="flex text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1">
+                        <div className="w-24">Type</div>
+                        <div className="w-48">Name</div>
+                        <div className="flex-1">Value</div>
+                      </div>
                       <div className="flex items-center bg-background border border-foreground/10 rounded-lg p-2.5 font-mono text-sm">
-                        <div className="w-24">{customDomain.split('.').length > 2 ? 'CNAME' : 'A'}</div>
-                        <div className="w-24">{customDomain.split('.').length > 2 ? customDomain.split('.')[0] : '@'}</div>
-                        <div className="flex-1 flex items-center justify-between text-muted-foreground">
-                          <span>{customDomain.split('.').length > 2 ? 'proxy.shipnode.online' : '198.51.100.24'}</span>
+                        <div className="w-24 font-semibold">{customDomain.split('.').length > 2 ? 'CNAME' : 'A'}</div>
+                        <div className="w-48 truncate pr-4" title={customDomain.split('.').length > 2 ? customDomain.split('.').slice(0, -2).join('.') : '@'}>
+                            {customDomain.split('.').length > 2 ? customDomain.split('.').slice(0, -2).join('.') : '@'}
+                        </div>
+                        <div className="flex-1 flex items-center justify-between min-w-0">
+                          <span className="text-foreground/80 truncate pr-4">
+                            {customDomain.split('.').length > 2 ? 'shipnode.soumyodeep.online' : '3.111.220.35'}
+                          </span>
                         </div>
                       </div>
                     </div>

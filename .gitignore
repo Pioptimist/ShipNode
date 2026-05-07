@@ -5,6 +5,7 @@ drizzle/*.sql
 notes.txt
 notes.frontend.txt
 notes.frontend
+notes.backend.txt
 .aidesigner/*
 !.aidesigner/.gitkeep
 .github/skills/aidesigner-frontend/

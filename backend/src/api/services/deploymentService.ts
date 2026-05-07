@@ -121,8 +121,9 @@ export const queueNewDeployment = async (
       repoUrl: `https://github.com/${repoFullName}`,
       commitHash: commitHash,
       rootDir: project.rootDirectory || "/", 
-      installCmd: project.installCommand || "npm install",
-      buildCmd: project.buildCommand || "npm run build",
+      installCmd: project.installCommand ?? "npm install",
+      buildCmd: project.buildCommand ?? "npm run build",
+      outputDir: project.outputDirectory ?? "dist",
       isProduction: isProduction, // Tell the worker how to handle the aftermath
     
     });
@@ -177,11 +178,6 @@ export const deleteGithubWebhook = async (
 };
 
 
-
-
-/**
- * Recursively deletes all files in an R2 bucket under a specific prefix (folder)
- */
 export const deleteR2Directory = async (prefix: string) => {
   if (!prefix) return;
 

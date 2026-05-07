@@ -64,7 +64,7 @@ export default function ProjectOverview() {
 
   const activeDeployment = deployments.find(d => d.id === project.activeDeploymentId);
   const previewDeployments = deployments.filter(d => d.id !== project.activeDeploymentId);
-  const prodUrl = `https://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`; ;
+  const prodUrl = `http://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`; ;
 
   return (
     // 🚨 Notice how we removed min-h-screen and the background color! 
@@ -199,7 +199,7 @@ export default function ProjectOverview() {
                   {/* Safely implemented your ternary fix! */}
                   {dep.status === "READY" ? (
                       dep.previewUrl ? (
-                        <a href={`https://${dep.previewUrl}.${import.meta.env.VITE_PLATFORM_DOMAIN}`} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1 text-xs border border-foreground/10 rounded hover:bg-foreground/10 transition-colors flex items-center gap-1.5">
+                        <a href={`http://${dep.previewUrl}.${import.meta.env.VITE_PLATFORM_DOMAIN}`} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1 text-xs border border-foreground/10 rounded hover:bg-foreground/10 transition-colors flex items-center gap-1.5">
                           <ExternalLink className="w-3 h-3" /> Preview
                         </a>
                       ) : (

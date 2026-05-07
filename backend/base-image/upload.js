@@ -93,12 +93,24 @@ async function init() {
     }
 
     // 🔹 Validate index.html
-    const indexPath = path.join(distFolderPath, "index.html");
-    if (!fs.existsSync(indexPath)) {
-        console.error("Invalid build: index.html not found");
-        process.exit(1);
-    }
+    // 🔹 Validate output directory has content
+    const isVanillaDeployment = finalOutputDir === '.' || finalOutputDir === './';
 
+    if (isVanillaDeployment) {
+        // Vanilla: just need ANY files to exist
+        const files = getAllFiles(distFolderPath);
+        if (files.length === 0) {
+            console.error("Build output is empty");
+            process.exit(1);
+        }
+    } else {
+        // Built projects: require index.html for SPA routing
+        const indexPath = path.join(distFolderPath, "index.html");
+        if (!fs.existsSync(indexPath)) {
+            console.error("Invalid build: index.html not found");
+            process.exit(1);
+        }
+    }
     // 🔹 Collect files
     const files = getAllFiles(distFolderPath);
 

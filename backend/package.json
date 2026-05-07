@@ -8,6 +8,8 @@
     "dev:api": "tsx watch src/api/server.ts",
     "dev:proxy": "tsx watch src/proxy/server.ts",
     "dev:worker": "tsx watch src/worker/server.ts",
+
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:proxy\" \"npm run dev:worker\" ",
     "build": "tsc",
     "start:api": "node dist/api/server.js",
     "start:proxy": "node dist/proxy/server.js",
@@ -32,11 +34,14 @@
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.4.1",
+    "geoip-lite": "^2.0.1",
     "http-proxy": "^1.18.1",
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
+    "kafkajs": "^2.2.4",
     "octokit": "^5.0.5",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "ua-parser-js": "^2.0.9"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
@@ -44,9 +49,12 @@
     "@types/cors": "^2.8.19",
     "@types/dockerode": "^4.0.1",
     "@types/express": "^5.0.6",
+    "@types/geoip-lite": "^1.4.4",
     "@types/http-proxy": "^1.17.17",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.5.2",
+    "@types/ua-parser-js": "^0.7.39",
+    "concurrently": "^9.2.1",
     "drizzle-kit": "^0.31.10",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"

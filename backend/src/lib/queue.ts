@@ -24,6 +24,7 @@ export interface DeployJobData {
     rootDir: string;
     installCmd: string;
     buildCmd: string;
+    outputDir: string;
     isProduction: boolean;
     
 }

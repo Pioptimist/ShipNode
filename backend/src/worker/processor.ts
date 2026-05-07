@@ -19,7 +19,7 @@ const docker = new Docker({
 const IGNORE_MASKING = new Set(["production", "development", "test", "staging", "true", "false", "0", "1", "yes", "no"]);
 
 export const processDeploymentJob = async (job: Job<DeployJobData>) => {
-    const { projectId, deploymentId, repoUrl, commitHash, rootDir, installCmd, buildCmd , isProduction } = job.data;
+    const { projectId, deploymentId, repoUrl, commitHash, rootDir, installCmd, buildCmd, outputDir, isProduction } = job.data;
     console.log(`[Worker] Started Deployment Job: ${deploymentId} for Project: ${projectId}`);
     
     let startTime = Date.now();
@@ -73,6 +73,7 @@ export const processDeploymentJob = async (job: Job<DeployJobData>) => {
                 `REPO_URL=${repoUrl}`,
                 `COMMIT_HASH=${commitHash}`,
                 `ROOT_DIR=${rootDir}`,
+                `OUTPUT_DIR=${outputDir}`,
                 `INSTALL_CMD=${installCmd}`,
                 `BUILD_CMD=${buildCmd}`,
                 `PROJECT_ID=${projectId}`,

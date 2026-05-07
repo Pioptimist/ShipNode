@@ -277,7 +277,7 @@ export default function NewProject() {
     };
   }, [deploymentId, deploymentStatus]);
 
-  const liveUrl = deploymentData?.subdomain ? `https://${deploymentData.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}` : "#";
+  const liveUrl = deploymentData?.subdomain ? `http://${deploymentData.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}` : "#";
 
   return (
     <div className="flex flex-col min-h-screen bg-background overflow-x-hidden scroll-smooth">

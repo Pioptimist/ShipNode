@@ -115,7 +115,7 @@ export default function Projects() {
               const status = latestDeploy?.status || "UNKNOWN";
               const isReady = status === "READY";
               const isFailed = status === "FAILED";
-              const liveUrl = `https://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`;
+              const liveUrl = `http://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`;
               
               let StatusIcon = <div className="w-6 h-6 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin" title="Building" />;
               if (isReady) StatusIcon = <CheckCircle2 className="w-6 h-6 text-green-500" title="Ready" />;
@@ -129,7 +129,7 @@ export default function Projects() {
                       <Link to={`/project/${project.id}`} className="relative w-10 h-10 rounded-[10px] border border-foreground/10 overflow-hidden bg-foreground/5 flex items-center justify-center shrink-0 shadow-sm hover:opacity-80 transition-opacity">
                           <Box className="w-5 h-5 text-foreground/50 absolute" />
                           <img
-                              src={`https://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}/favicon.ico`}
+                              src={`http://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}/favicon.ico`}
                               alt={`${project.name} favicon`}
                               className="w-full h-full object-cover relative z-10 bg-background"
                               onError={(e) => {

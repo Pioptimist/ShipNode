@@ -64,7 +64,7 @@ export default function ProjectOverview() {
 
   const activeDeployment = deployments.find(d => d.id === project.activeDeploymentId);
   const previewDeployments = deployments.filter(d => d.id !== project.activeDeploymentId);
-  const prodUrl = `http://${project.subdomain}.localhost:8000`;
+  const prodUrl = `http://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`; ;
 
   return (
     // 🚨 Notice how we removed min-h-screen and the background color! 
@@ -101,7 +101,8 @@ export default function ProjectOverview() {
                 <iframe 
                   src={prodUrl} 
                   title="Production Preview" 
-                  className="absolute top-0 left-0 w-[200%] h-[200%] scale-50 origin-top-left border-0 pointer-events-none" 
+                  scrolling="no"
+                  className="absolute top-0 left-0 w-[400%] h-[400%] scale-[0.25] origin-top-left border-0 pointer-events-none" 
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors pointer-events-none" />
               </div>
@@ -118,7 +119,7 @@ export default function ProjectOverview() {
             <div>
               <p className="text-sm text-muted-foreground mb-1">Deployment</p>
               <a href={prodUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium hover:underline text-foreground">
-                {project.subdomain}.localhost:8000
+                {project.subdomain}.{import.meta.env.VITE_PLATFORM_DOMAIN} 
               </a>
             </div>
             
@@ -198,7 +199,7 @@ export default function ProjectOverview() {
                   {/* Safely implemented your ternary fix! */}
                   {dep.status === "READY" ? (
                       dep.previewUrl ? (
-                        <a href={`http://${dep.previewUrl}.localhost:8000`} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1 text-xs border border-foreground/10 rounded hover:bg-foreground/10 transition-colors flex items-center gap-1.5">
+                        <a href={`http://${dep.previewUrl}.${import.meta.env.VITE_PLATFORM_DOMAIN}`} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1 text-xs border border-foreground/10 rounded hover:bg-foreground/10 transition-colors flex items-center gap-1.5">
                           <ExternalLink className="w-3 h-3" /> Preview
                         </a>
                       ) : (

@@ -29,7 +29,8 @@ export const getDeploymentStatus = async (req: Request, res: Response) => {
                 commitMessage: deployments.commitMessage,
                 subdomain: projects.subdomain,
                 repoName: projects.repoName,
-                buildLogsUrl: deployments.buildLogsUrl
+                buildLogsUrl: deployments.buildLogsUrl,
+                previewUrl: deployments.previewUrl
             })
             .from(deployments)
             .innerJoin(projects, eq(deployments.projectId, projects.id))

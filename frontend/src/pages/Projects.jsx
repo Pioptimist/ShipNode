@@ -9,6 +9,7 @@ import axiosInstance from "../utils/axiosInstance";
 import { API_PATHS } from "../utils/apiPaths";
 import { EmptyProjectState } from "../components/dashboard/EmptyProjectState"; 
 import { DeleteProjectModal } from "../components/dashboard/DeleteProjectModal"; 
+import { Toast } from "../components/ui/Toast";
 
 const formatTimeAgo = (dateString) => {
   if (!dateString) return "Just now";
@@ -32,6 +33,8 @@ export default function Projects() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletedProjectName, setDeletedProjectName] = useState("");
+  const [toast, setToast] = useState({ isVisible: false, message: "", type: "success" });
 
   const fetchProjects = async () => {
     setIsLoading(true);
@@ -62,11 +65,14 @@ export default function Projects() {
       const res = await axiosInstance.delete(API_PATHS.PROJECTS.DELETE(projectId));
       if (res.data?.success) {
         setProjects((prev) => prev.filter(p => p.id !== projectId));
+        setDeletedProjectName(projectToDelete?.name);
         setIsModalOpen(false); 
+        setToast({ isVisible: true, message: res.data.message || "Project deleted successfully", type: "success" });
       }
     } catch (error) {
       console.error("Failed to delete project:", error);
-      alert("Failed to delete project. Please try again.");
+      const errorMessage = error.response?.data?.message || "Failed to delete project. Please try again.";
+      setToast({ isVisible: true, message: errorMessage, type: "error" });
     } finally {
       setIsDeleting(false);
       setProjectToDelete(null); 
@@ -109,7 +115,7 @@ export default function Projects() {
               const status = latestDeploy?.status || "UNKNOWN";
               const isReady = status === "READY";
               const isFailed = status === "FAILED";
-              const liveUrl = `http://${project.subdomain}.localhost:8000`; 
+              const liveUrl = `http://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`;
               
               let StatusIcon = <div className="w-6 h-6 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin" title="Building" />;
               if (isReady) StatusIcon = <CheckCircle2 className="w-6 h-6 text-green-500" title="Ready" />;
@@ -118,23 +124,21 @@ export default function Projects() {
               return (
                 <div key={project.id} className="bg-[#000000] border border-foreground/10 rounded-xl p-6 font-sans text-foreground shadow-sm hover:border-foreground/30 transition-all flex flex-col relative group">
                   
-                  <div className="flex items-start justify-between mb-5">
-                    <div className="flex items-start gap-4">
-                      <Link to={`/project/${project.id}`} className="w-8 h-8 rounded-md border border-foreground/20 bg-foreground/5 flex items-center justify-center shrink-0 mt-0.5 hover:opacity-80 transition-opacity">
-                          <div className="relative w-10 h-10 rounded-[10px] border border-foreground/10 overflow-hidden bg-foreground/5 shrink-0 shadow-sm flex items-center justify-center">
-                              <Box className="w-5 h-5 text-foreground/50 absolute" />
-                              <img
-                                  src={`https://www.google.com/s2/favicons?domain=${project.subdomain}.localhost:8000&sz=128`}
-                                  alt={`${project.name} favicon`}
-                                  className="w-full h-full object-cover relative z-10 bg-background"
-                                  onError={(e) => {
-                                      e.target.style.display = 'none';
-                                  }}
-                              />
-                          </div>
+                  <div className="flex items-start justify-between gap-3 mb-5">
+                    <div className="flex items-start gap-4 flex-1 min-w-0">
+                      <Link to={`/project/${project.id}`} className="relative w-10 h-10 rounded-[10px] border border-foreground/10 overflow-hidden bg-foreground/5 flex items-center justify-center shrink-0 shadow-sm hover:opacity-80 transition-opacity">
+                          <Box className="w-5 h-5 text-foreground/50 absolute" />
+                          <img
+                              src={`http://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}/favicon.ico`}
+                              alt={`${project.name} favicon`}
+                              className="w-full h-full object-cover relative z-10 bg-background"
+                              onError={(e) => {
+                                  e.target.style.display = 'none';
+                              }}
+                          />
                       </Link>
 
-                      <div className="flex flex-col overflow-hidden">
+                      <div className="flex flex-col flex-1 min-w-0">
                         <Link to={`/project/${project.id}`} className="text-lg font-bold tracking-tight text-foreground truncate hover:underline">
                           {project.name}
                         </Link>
@@ -142,9 +146,10 @@ export default function Projects() {
                           href={liveUrl} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="text-sm text-muted-foreground hover:text-foreground transition-colors truncate"
+                          className="text-sm text-muted-foreground hover:text-foreground transition-colors truncate block w-full"
+                          title={`${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`}
                         >
-                          {project.subdomain}.localhost
+                          {project.subdomain}.{import.meta.env.VITE_PLATFORM_DOMAIN}
                         </a>
                       </div>
                     </div>
@@ -205,6 +210,12 @@ export default function Projects() {
         onConfirm={executeDelete}
         project={projectToDelete}
         isDeleting={isDeleting}
+      />
+      <Toast 
+        isVisible={toast.isVisible}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ ...toast, isVisible: false })}
       />
     </>
   );

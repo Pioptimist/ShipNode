@@ -1,7 +1,6 @@
 export const API_PATHS = {
   AUTH: {
     GITHUB_LOGIN: "/api/auth/github",
-    GITHUB_CALLBACK: "/api/auth/github/callback",
     REFRESH: "/api/auth/refresh",
     LOGOUT: "/api/auth/logout",
     GET_ME: "/api/auth/me",

@@ -72,8 +72,8 @@ export default function Deployments() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-semibold">{deploy.projectName}</span>
                       <span className="text-muted-foreground">/</span>
-                      <a href={`http://${deploy.subdomain}.localhost:8000`} target="_blank" rel="noreferrer" className="text-sm text-blue-400 hover:underline">
-                        {deploy.subdomain}.localhost
+                      <a href={`http://${deploy.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`} target="_blank" rel="noreferrer" className="text-sm text-blue-400 hover:underline">
+                        {deploy.subdomain}.{import.meta.env.VITE_PLATFORM_DOMAIN}
                       </a>
                     </div>
                     <div className="flex items-center gap-3 text-sm text-muted-foreground">

@@ -15,6 +15,9 @@ import deploymentRoutes from "./routes/deploymentRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 
 const app = express();
+
+app.set('trust proxy', 1);
+
 const server = http.createServer(app);
 
 
@@ -22,7 +25,7 @@ initializeSockets(server);
 
 app.use(
   cors({
-    origin: ["http://localhost:5173"], 
+    origin: [ENV.FRONTEND_URL,"http://localhost:5173"], 
     methods: ["GET", "POST", "PUT", "DELETE","PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true, 

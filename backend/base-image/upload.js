@@ -47,6 +47,11 @@ async function init() {
     let finalOutputDir = ENV_OUTPUT_DIR;
     let distFolderPath = finalOutputDir ? path.join(basePath, finalOutputDir) : "";
 
+    // Handle Vanilla HTML/JS that might point to outputDirectory as "."
+    if (finalOutputDir === '.' || finalOutputDir === './') {
+        distFolderPath = basePath;
+    }
+
     // 🔹 Fallback detection
     if (!finalOutputDir || !fs.existsSync(distFolderPath)) {
         // fs.existsSync is used here to check if the provided output directory exists
@@ -88,12 +93,24 @@ async function init() {
     }
 
     // 🔹 Validate index.html
-    const indexPath = path.join(distFolderPath, "index.html");
-    if (!fs.existsSync(indexPath)) {
-        console.error("Invalid build: index.html not found");
-        process.exit(1);
-    }
+    // 🔹 Validate output directory has content
+    const isVanillaDeployment = finalOutputDir === '.' || finalOutputDir === './';
 
+    if (isVanillaDeployment) {
+        // Vanilla: just need ANY files to exist
+        const files = getAllFiles(distFolderPath);
+        if (files.length === 0) {
+            console.error("Build output is empty");
+            process.exit(1);
+        }
+    } else {
+        // Built projects: require index.html for SPA routing
+        const indexPath = path.join(distFolderPath, "index.html");
+        if (!fs.existsSync(indexPath)) {
+            console.error("Invalid build: index.html not found");
+            process.exit(1);
+        }
+    }
     // 🔹 Collect files
     const files = getAllFiles(distFolderPath);
 

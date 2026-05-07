@@ -24,11 +24,21 @@ echo "Navigating to root directory: $ROOT_DIR"
 cd "$WORKSPACE_DIR/$ROOT_DIR"  
 # notice we are using absolute path here to avoid any confusion about where we are in the filesystem not relative so it wont throw an error
 
-echo "Installing Dependencies ($INSTALL_CMD)..."
-eval "$INSTALL_CMD"
+echo "Installing Dependencies..."
+if [ -n "$INSTALL_CMD" ] && [ "$INSTALL_CMD" != "null" ]; then
+    echo "Running ($INSTALL_CMD)..."
+    eval "$INSTALL_CMD"
+else
+    echo "Skipping install command (not provided or null)."
+fi
 
-echo "Building Project ($BUILD_CMD)..."
-eval "$BUILD_CMD"
+echo "Building Project..."
+if [ -n "$BUILD_CMD" ] && [ "$BUILD_CMD" != "null" ]; then
+    echo "Running ($BUILD_CMD)..."
+    eval "$BUILD_CMD"
+else
+    echo "Skipping build command (not provided or null)."
+fi
 
 echo "Build Complete! Launching Cloudflare R2 Uploader..."
 

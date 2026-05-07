@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { eq, and, ne } from "drizzle-orm";
 import dns from "dns/promises"; // Node's native DNS module!
 import { db } from "../../db/index.js";
-import { projects } from "../../db/schema.js";
+import { projects, deployments } from "../../db/schema.js";
 import { AuthRequest } from "../middleware/authMiddleware.js";
 import redis from "../../lib/redis.js";
 // --- Helper to clean up user input ---
@@ -91,12 +91,23 @@ export const verifyCustomDomain = async (req: AuthRequest, res: Response) => {
        
         let txtRecords: string[][] = [];
         try {
-            console.log(`[DNS] Checking TXT records for ${project.customDomain}...`);
-            txtRecords = await dns.resolveTxt(project.customDomain);
+            const prefixedDomain = `_shipnode.${project.customDomain}`;
+            console.log(`[DNS] Checking TXT records for ${prefixedDomain}...`);
+            try {
+                txtRecords = await dns.resolveTxt(prefixedDomain);
+            } catch (err: any) {
+                // If the prefixed check fails, fall back to checking the root domain
+                // just in case they added it directly to an A-record domain.
+                if (err.code === 'ENOTFOUND' || err.code === 'ENODATA') {
+                    console.log(`[DNS] Falling back: Checking TXT records for ${project.customDomain}...`);
+                    txtRecords = await dns.resolveTxt(project.customDomain);
+                } else {
+                    throw err;
+                }
+            }
         } catch (dnsError: any) {
-            // ENOTFOUND or ENODATA just means they haven't set up the records yet
             if (dnsError.code === 'ENOTFOUND' || dnsError.code === 'ENODATA') {
-                return res.status(400).json({ message: "No TXT records found on this domain. Have you added them to your registrar?" });
+                return res.status(400).json({ message: "No TXT records found. Have you added them to your registrar? (It may take a few minutes to propagate)" });
             }
             throw dnsError; 
         }
@@ -194,4 +205,60 @@ export const removeCustomDomain = async (req: AuthRequest, res: Response) => {
         console.error("Remove Domain Error:", error);
         return res.status(500).json({ success: false, message: "Failed to remove domain." });
     }
+};
+
+export const checkDomainForCaddy = async (req: Request, res: Response) => {
+    // Caddy passes the domain exactly like: ?domain=demo.shipnode.soumyodeep.online
+    const domainToCheck = req.query.domain as string;
+
+    if (!domainToCheck) return res.status(400).send("No domain provided");
+
+    const ROOT_DOMAIN = 'shipnode.soumyodeep.online';
+    const PLATFORM_DOMAINS = [
+        ROOT_DOMAIN,
+        `www.${ROOT_DOMAIN}`,
+        `test.${ROOT_DOMAIN}`
+    ];
+
+    // 1. Is it the main platform domain or a predefined one?
+    if (PLATFORM_DOMAINS.includes(domainToCheck)) {
+        return res.status(200).send("OK");
+    }
+
+    // 2. Is it a platform subdomain?
+    if (domainToCheck.endsWith(`.${ROOT_DOMAIN}`)) {
+        const subdomain = domainToCheck.replace(`.${ROOT_DOMAIN}`, '');
+
+        // Check if this project subdomain exists
+        const [projectBySubdomain] = await db.select()
+            .from(projects)
+            .where(eq(projects.subdomain, subdomain));
+
+        if (projectBySubdomain) {
+            return res.status(200).send("OK");
+        }
+
+        // Check if this preview URL exists
+        const [preview] = await db.select()
+            .from(deployments)
+            .where(eq(deployments.previewUrl, subdomain));
+
+        if (preview) {
+            return res.status(200).send("OK");
+        }
+        
+        return res.status(404).send("Not Found");
+    }
+
+    // 3. Otherwise, check the DB for custom domains
+    const [project] = await db.select()
+        .from(projects)
+        .where(eq(projects.customDomain, domainToCheck));
+
+    if (project && project.domainVerified) {
+        return res.status(200).send("OK"); // Valid Custom Domain!
+    }
+
+    // 4. Reject the SSL certificate issuance requests from randos
+    return res.status(404).send("Not Found"); 
 };

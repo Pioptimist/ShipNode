@@ -15,6 +15,7 @@ import DomainsPage from './pages/DomainsPage.jsx';
 import SecuritySettings from './components/settings/SecuritySettings.jsx';
 import GeneralSettings from './components/settings/GeneralSettings.jsx';
 import SettingsLayout from './pages/SettingsLayout.jsx';
+import ProjectLogs from './pages/ProjectLogs.jsx';
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
           {/* Specific Project Routes */}
           <Route path="/project/:id" element={<ProjectOverview />} />
           {/* <Route path="/project/:id/deployments" element={<ProjectDeployments />} /> */}
+          <Route path="/project/:id/logs" element={<ProjectLogs />} />
 
         </Route>
         <Route path="/new" element={<NewProject />} />

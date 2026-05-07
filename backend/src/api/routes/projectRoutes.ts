@@ -3,9 +3,12 @@ import { createProject } from "../controllers/githubController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { deleteProject, getProjectById, getUserProjects, rollbackProject } from "../controllers/projectController.js";
 import { addProjectEnv, deleteProjectEnv, getProjectEnvs } from "../controllers/envController.js";
-import { addCustomDomain, removeCustomDomain, verifyCustomDomain } from "../controllers/domainController.js";
+import { addCustomDomain, removeCustomDomain, verifyCustomDomain, checkDomainForCaddy } from "../controllers/domainController.js";
 
 const router = Router();
+
+// GET /api/projects/domain-check (for Caddy on_demand_tls)
+router.get("/domain-check", checkDomainForCaddy);
 
 // POST /api/projects
 

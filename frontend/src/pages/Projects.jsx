@@ -88,7 +88,11 @@ export default function Projects() {
   }
 
   if (projects.length === 0) {
-    return <EmptyProjectState />;
+    return (
+      <div className="px-4 md:px-6">
+         <EmptyProjectState />
+      </div>
+    );
   }
 
   const filteredProjects = projects.filter((project) => {
@@ -102,14 +106,13 @@ export default function Projects() {
 
   return (
     <>
-      {/* 🚨 Fix: Stable parent wrapper handles initial animation. Items-start prevents card stretching. */}
-      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 px-4 md:px-8 pb-8">
         {filteredProjects.length === 0 ? (
-          <div className="p-12 text-center border border-foreground/10 rounded-xl bg-[#000000] text-muted-foreground mt-4">
+          <div className="p-8 md:p-12 text-center border border-foreground/10 rounded-xl bg-[#000000] text-muted-foreground mt-4">
             No projects match your search for "{searchQuery}".
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 items-start mt-4 md:mt-6">
             {filteredProjects.map((project) => {
               const latestDeploy = project.latestDeployment;
               const status = latestDeploy?.status || "UNKNOWN";
@@ -117,15 +120,15 @@ export default function Projects() {
               const isFailed = status === "FAILED";
               const liveUrl = `http://${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`;
               
-              let StatusIcon = <div className="w-6 h-6 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin" title="Building" />;
-              if (isReady) StatusIcon = <CheckCircle2 className="w-6 h-6 text-green-500" title="Ready" />;
-              if (isFailed) StatusIcon = <XCircle className="w-6 h-6 text-red-500" title="Failed" />;
+              let StatusIcon = <div className="w-5 h-5 md:w-6 md:h-6 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin shrink-0" title="Building" />;
+              if (isReady) StatusIcon = <CheckCircle2 className="w-5 h-5 md:w-6 md:h-6 text-green-500 shrink-0" title="Ready" />;
+              if (isFailed) StatusIcon = <XCircle className="w-5 h-5 md:w-6 md:h-6 text-red-500 shrink-0" title="Failed" />;
 
               return (
-                <div key={project.id} className="bg-[#000000] border border-foreground/10 rounded-xl p-6 font-sans text-foreground shadow-sm hover:border-foreground/30 transition-all flex flex-col relative group">
+                <div key={project.id} className="bg-[#000000] border border-foreground/10 rounded-xl p-5 md:p-6 font-sans text-foreground shadow-sm hover:border-foreground/30 transition-all flex flex-col relative group">
                   
-                  <div className="flex items-start justify-between gap-3 mb-5">
-                    <div className="flex items-start gap-4 flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-3 mb-4 md:mb-5">
+                    <div className="flex items-start gap-3 md:gap-4 flex-1 min-w-0">
                       <Link to={`/project/${project.id}`} className="relative w-10 h-10 rounded-[10px] border border-foreground/10 overflow-hidden bg-foreground/5 flex items-center justify-center shrink-0 shadow-sm hover:opacity-80 transition-opacity">
                           <Box className="w-5 h-5 text-foreground/50 absolute" />
                           <img
@@ -139,14 +142,14 @@ export default function Projects() {
                       </Link>
 
                       <div className="flex flex-col flex-1 min-w-0">
-                        <Link to={`/project/${project.id}`} className="text-lg font-bold tracking-tight text-foreground truncate hover:underline">
+                        <Link to={`/project/${project.id}`} className="text-base md:text-lg font-bold tracking-tight text-foreground truncate hover:underline">
                           {project.name}
                         </Link>
                         <a 
                           href={liveUrl} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="text-sm text-muted-foreground hover:text-foreground transition-colors truncate block w-full"
+                          className="text-xs md:text-sm text-muted-foreground hover:text-foreground transition-colors truncate block w-full"
                           title={`${project.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}`}
                         >
                           {project.subdomain}.{import.meta.env.VITE_PLATFORM_DOMAIN}
@@ -154,7 +157,7 @@ export default function Projects() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2 md:gap-3 shrink-0">
                       {StatusIcon}
                       <div className="relative">
                         <button 
@@ -162,36 +165,36 @@ export default function Projects() {
                           className="text-muted-foreground hover:text-red-500 transition-colors p-1 rounded-md hover:bg-foreground/10"
                           title="Delete Project"
                         >
-                          <MoreHorizontal className="w-5 h-5" />
+                          <MoreHorizontal className="w-4 h-4 md:w-5 md:h-5" />
                         </button>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mb-5">
+                  <div className="mb-4 md:mb-5">
                     <a 
                       href={`https://github.com/${project.repoName}`}
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 bg-foreground/5 hover:bg-foreground/10 transition-colors border border-foreground/10 rounded-full px-3 py-1 text-[13px] font-medium text-foreground"
+                      className="inline-flex items-center gap-1.5 md:gap-2 bg-foreground/5 hover:bg-foreground/10 transition-colors border border-foreground/10 rounded-full px-2.5 md:px-3 py-1 text-[12px] md:text-[13px] font-medium text-foreground max-w-full truncate"
                     >
-                      <FaGithub className="w-3.5 h-3.5 text-foreground/70" />
-                      {project.repoName}
+                      <FaGithub className="w-3.5 h-3.5 text-foreground/70 shrink-0" />
+                      <span className="truncate">{project.repoName}</span>
                     </a>
                   </div>
 
-                  <p className="text-[15px] font-medium text-foreground mb-2 leading-snug line-clamp-1">
+                  <p className="text-[14px] md:text-[15px] font-medium text-foreground mb-2 leading-snug line-clamp-1">
                     {latestDeploy?.commitMessage || "Initial deployment"}
                   </p>
 
-                  <div className="flex items-center gap-2 text-[13px] text-muted-foreground font-mono tracking-tight mt-auto pt-1">
-                    <span>{formatTimeAgo(latestDeploy?.createdAt)}</span>
+                  <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[12px] md:text-[13px] text-muted-foreground font-mono tracking-tight mt-auto pt-1">
+                    <span className="shrink-0">{formatTimeAgo(latestDeploy?.createdAt)}</span>
                     {latestDeploy?.branch && (
                       <>
-                        <span>on</span>
-                        <div className="flex items-center gap-1">
-                          <GitBranch className="w-3.5 h-3.5" />
-                          <span className="text-foreground/90">{latestDeploy.branch}</span>
+                        <span className="shrink-0">on</span>
+                        <div className="flex items-center gap-1 min-w-0">
+                          <GitBranch className="w-3.5 h-3.5 shrink-0" />
+                          <span className="text-foreground/90 truncate">{latestDeploy.branch}</span>
                         </div>
                       </>
                     )}

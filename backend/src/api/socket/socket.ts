@@ -17,8 +17,10 @@ export const initializeSockets = (server: HttpServer) => {
   // We cannot import the default 'redis' from lib/redis.ts because once a connection enters 'subscriber' mode, it cannot be used for standard get/set caching commands.
 
   const subscriber = new Redis({
-    host: "127.0.0.1",
-    port: 6379,
+    
+    host: process.env.REDIS_HOST || "127.0.0.1",
+    port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT) : 6379,
+    family: 4,  //for ipv4 , node 20+ looks for ipv6 but we want ipv4
     maxRetriesPerRequest: null,
   });
 

@@ -1,0 +1,142 @@
+version: "3.9"
+
+services:
+
+  # =========================
+  # REDIS
+  # =========================
+  redis:
+    image: redis:7-alpine
+    container_name: shipnode-redis
+
+    command: redis-server --loglevel warning
+
+    restart: unless-stopped
+
+    volumes:
+      - redis-data:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+    networks:
+      - shipnode
+
+
+  # =========================
+  # API SERVER
+  # =========================
+  api:
+    image: shipnode-backend
+
+    build:
+      context: ./backend
+       # means build the image from backend dockerfile and name it shipnode-backend so that both worker and proxy can use the same image 
+    container_name: shipnode-api
+
+    command: node dist/api/server.js
+
+    env_file:
+      - ./backend/.env
+
+    ports:
+      - "3031:3031"
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    networks:
+      - shipnode
+
+
+  # =========================
+  # REVERSE PROXY SERVER
+  # =========================
+  proxy:
+    image: shipnode-backend
+
+    container_name: shipnode-proxy
+
+    command: node dist/proxy/server.js
+
+    env_file:
+      - ./backend/.env
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    networks:
+      - shipnode
+
+
+  # =========================
+  # WORKER SERVER
+  # =========================
+  worker:
+    image: shipnode-backend
+
+    container_name: shipnode-worker
+
+    command: node dist/worker/server.js
+
+    env_file:
+      - ./backend/.env
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    restart: unless-stopped
+
+    networks:
+      - shipnode
+
+
+  # =========================
+  # FRONTEND
+  # =========================
+  frontend:
+    image: shipnode-frontend
+
+    build:
+      context: ./frontend
+
+    container_name: shipnode-frontend
+
+    ports:
+      - "5173:80"
+
+    restart: unless-stopped
+
+    networks:
+      - shipnode
+
+
+# =========================
+# VOLUMES
+# =========================
+volumes:
+  redis-data:
+
+
+# =========================
+# NETWORKS
+# =========================
+networks:
+  shipnode:
+    driver: bridge

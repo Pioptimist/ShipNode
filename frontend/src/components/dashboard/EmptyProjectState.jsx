@@ -39,15 +39,14 @@ export function EmptyProjectState() {
     navigate(`/new?repo=${encodeURIComponent(repoName)}`);
   };
 
- 
   const filteredRepos = repos
     .filter((repo) => repo.name.toLowerCase().includes(searchTerm.toLowerCase()))
     .slice(0, 3);
 
   return (
-    <div className="w-full max-w-4xl mx-auto mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700 font-sans">
-      <div className="text-center mb-12">
-        <h2 className="text-3xl font-semibold tracking-tight mb-3">
+    <div className="w-full max-w-4xl mx-auto mt-6 md:mt-8 px-4 md:px-0 animate-in fade-in slide-in-from-bottom-4 duration-700 font-sans">
+      <div className="text-center mb-8 md:mb-12">
+        <h2 className="text-2xl md:text-3xl font-semibold tracking-tight mb-3">
           Let's build something new.
         </h2>
         <p className="text-muted-foreground text-sm">
@@ -56,7 +55,7 @@ export function EmptyProjectState() {
       </div>
 
       <div className="border border-foreground/10 bg-background/50 backdrop-blur-sm rounded-xl overflow-hidden shadow-sm">
-        <div className="p-6 border-b border-foreground/10">
+        <div className="p-4 md:p-6 border-b border-foreground/10">
           <h3 className="text-lg font-medium flex items-center gap-2 mb-4">
             <FaGithub className="w-5 h-5" />
             Import Git Repository
@@ -74,7 +73,6 @@ export function EmptyProjectState() {
           </div>
         </div>
 
-    
         <div className="divide-y divide-foreground/5 min-h-[150px] relative">
           {loading ? (
             <div className="absolute inset-0 flex items-center justify-center">
@@ -82,19 +80,19 @@ export function EmptyProjectState() {
             </div>
           ) : filteredRepos.length > 0 ? (
             filteredRepos.map((repo, idx) => (
-              <div key={idx} className="p-4 flex items-center justify-between hover:bg-foreground/5 transition-colors group">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center">
+              <div key={idx} className="p-4 flex sm:flex-row flex-col items-start sm:items-center justify-between gap-4 hover:bg-foreground/5 transition-colors group">
+                <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
+                  <div className="w-8 h-8 shrink-0 rounded-full bg-foreground/10 flex items-center justify-center">
                     <FaGithub className="w-4 h-4 text-muted-foreground" />
                   </div>
-                  <div className="flex flex-col text-left">
-                    <p className="text-sm font-medium">{repo.name}</p>
+                  <div className="flex flex-col text-left min-w-0">
+                    <p className="text-sm font-medium truncate">{repo.name}</p>
                     <p className="text-xs text-muted-foreground">{new Date(repo.updatedAt || repo.updated_at || Date.now()).toLocaleDateString()}</p>
                   </div>
                 </div>
                 <button 
                   onClick={() => handleImport(repo.name)}
-                  className="px-4 py-1.5 bg-foreground/10 hover:bg-foreground text-foreground hover:text-background rounded-md text-sm font-medium transition-all opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-1.5 bg-foreground/10 hover:bg-foreground text-foreground hover:text-background rounded-md text-sm font-medium transition-all sm:opacity-0 sm:group-hover:opacity-100 sm:translate-x-2 sm:group-hover:translate-x-0 cursor-pointer text-center"
                 >
                   Import
                 </button>

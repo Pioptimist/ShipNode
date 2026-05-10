@@ -6,14 +6,24 @@ import { io } from "socket.io-client";
 import { ENV } from "../utils/env.ts";
 import { 
   ArrowLeft, GitBranch, ChevronDown, ChevronRight,
-  Loader2, Folder, File, X, Plus, Minus, Upload,
-  Terminal, CheckCircle2, Globe, Clock, GitCommit, ExternalLink, XCircle, LayoutDashboard 
+  Loader2, Folder, File, X, Plus, Minus,
+  Terminal, CheckCircle2, Globe, GitCommit, ExternalLink, XCircle, LayoutDashboard 
 } from "lucide-react";
 import axiosInstance from "../utils/axiosInstance";
 import { API_PATHS } from "../utils/apiPaths";
 import AnsiModule from "ansi-to-react";
 
 const Ansi = AnsiModule.default || AnsiModule;
+
+const FRAMEWORKS = [
+  { name: 'Vite / React', value: 'VITE' },
+  { name: 'Vue.js', value: 'VUE' },
+  { name: 'Angular', value: 'ANGULAR' },
+  { name: 'Astro', value: 'ASTRO' },
+  { name: 'SolidJS', value: 'SOLID' },
+  { name: 'Qwik', value: 'QWIK' },
+  { name: 'Vanilla HTML/JS/CSS', value: 'VANILLA' },
+];
 
 export default function NewProject() {
   const { user } = useAuth();
@@ -27,6 +37,9 @@ export default function NewProject() {
   const [projectName, setProjectName] = useState(repoName.toLowerCase().replace(/[^a-z0-9]/g, '-'));
   const [rootDirectory, setRootDirectory] = useState("./");
   const [framework, setFramework] = useState("VITE");
+  const [isFrameworkDropdownOpen, setIsFrameworkDropdownOpen] = useState(false);
+  const frameworkRef = useRef(null);
+
   const [installCommand, setInstallCommand] = useState("npm install");
   const [buildCommand, setBuildCommand] = useState("npm run build");
   const [outputDirectory, setOutputDirectory] = useState("dist");
@@ -34,7 +47,7 @@ export default function NewProject() {
   const [branches, setBranches] = useState([]);
   const [isLoadingBranches, setIsLoadingBranches] = useState(false);
 
-  // 🚨 --- Environment Variables State ---
+  // --- Environment Variables State ---
   const [envVars, setEnvVars] = useState([{ key: "", value: "" }]);
   const [showEnvVars, setShowEnvVars] = useState(false);
   const fileInputRef = useRef(null);
@@ -72,6 +85,17 @@ export default function NewProject() {
     }
   }, []);
 
+  // Handle clicking outside custom framework dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (frameworkRef.current && !frameworkRef.current.contains(event.target)) {
+        setIsFrameworkDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   useEffect(() => {
     if (!repoOwner || !repoName) return;
     const fetchBranches = async () => {
@@ -107,7 +131,7 @@ export default function NewProject() {
   const handleNavigateDir = (newPath) => { setExplorerPath(newPath); fetchDirectory(newPath); };
   const handleSelectDir = () => { setRootDirectory(explorerPath || "./"); setIsExplorerOpen(false); };
 
-  // 🚨 --- Env Var Handlers ---
+  // --- Env Var Handlers ---
   const handleEnvChange = (index, field, value) => {
     const newEnvs = [...envVars];
     newEnvs[index][field] = value;
@@ -131,7 +155,6 @@ export default function NewProject() {
       const parsedEnvs = [];
       
       lines.forEach(line => {
-        // Match KEY=VALUE, ignoring comments and empty lines
         const match = line.match(/^([^#=]+)=(.*)$/);
         if (match) {
           parsedEnvs.push({ key: match[1].trim(), value: match[2].trim() });
@@ -144,7 +167,7 @@ export default function NewProject() {
       }
     };
     reader.readAsText(file);
-    e.target.value = null; // Reset input
+    e.target.value = null; 
   };
 
   // --- Submit Handler ---
@@ -153,22 +176,18 @@ export default function NewProject() {
     setError("");
 
     try {
-      // 1. Filter the envs right here
       const validEnvs = envVars.filter(env => env.key.trim() && env.value.trim());
 
-      // 2. Attach them to the main payload!
       const payload = { 
         repoOwner, repoName, branch, framework, rootDirectory, 
         installCommand, buildCommand, outputDirectory,
-        envs: validEnvs // 🚨 ADDED HERE
+        envs: validEnvs 
       };
       
       const response = await axiosInstance.post(API_PATHS.PROJECTS.CREATE, payload);
       
       if (response.data.success) {
         const newId = response.data.data.deploymentId;
-
-        // 🚨 REMOVED THE Promise.all() LOOP COMPLETELY
 
         if (newId) {
           setSearchParams({ repo: repoName, deploy: newId }, { replace: true });
@@ -277,7 +296,7 @@ export default function NewProject() {
     };
   }, [deploymentId, deploymentStatus]);
 
-  const liveUrl = deploymentData?.subdomain ? `http://${deploymentData.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}` : "#";
+  const liveUrl = deploymentData?.subdomain ? `https://${deploymentData.subdomain}.${import.meta.env.VITE_PLATFORM_DOMAIN}` : "#";
 
   return (
     <div className="flex flex-col min-h-screen bg-background overflow-x-hidden scroll-smooth">
@@ -345,19 +364,42 @@ export default function NewProject() {
               </div>
 
               <div className="space-y-4">
-                <div className="space-y-2">
+                <div className="space-y-2" ref={frameworkRef}>
                   <label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Framework Preset</label>
                   <div className="relative">
-                    <select 
-                      value={framework}
-                      onChange={(e) => setFramework(e.target.value)}
-                      className="w-full bg-background border border-foreground/10 rounded-md px-3 py-2 text-sm outline-none appearance-none"
+                    <button
+                      type="button"
+                      onClick={() => setIsFrameworkDropdownOpen(!isFrameworkDropdownOpen)}
+                      className="w-full bg-background border border-foreground/10 rounded-md px-3 py-2 text-sm outline-none flex items-center justify-between hover:border-foreground/30 transition-colors font-medium text-foreground"
                     >
-                      <option value="VITE">Vite / React</option>
-                      <option value="NEXTJS">Next.js</option>
-                      <option value="VANILLA">Vanilla HTML/JS/CSS</option>
-                    </select>
-                    <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+                      <span>{FRAMEWORKS.find(f => f.value === framework)?.name || 'Select Framework'}</span>
+                      <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isFrameworkDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isFrameworkDropdownOpen && (
+                      <div className="absolute top-full left-0 w-full mt-1.5 bg-[#0a0a0a] border border-foreground/10 rounded-md shadow-2xl overflow-hidden z-20 animate-in fade-in zoom-in-95 duration-100">
+                        <div className="max-h-60 overflow-y-auto p-1 space-y-0.5 scrollbar-hide">
+                          {FRAMEWORKS.map((fw) => (
+                            <button
+                              key={fw.value}
+                              type="button"
+                              onClick={() => {
+                                setFramework(fw.value);
+                                setIsFrameworkDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm rounded-sm transition-colors flex items-center justify-between ${
+                                framework === fw.value 
+                                  ? 'bg-foreground/10 text-foreground font-medium' 
+                                  : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
+                              }`}
+                            >
+                              {fw.name}
+                              {framework === fw.value && <CheckCircle2 className="w-4 h-4 text-foreground" />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -387,7 +429,7 @@ export default function NewProject() {
                 </div>
               </div>
 
-              {/* 🚨 ENVIRONMENT VARIABLES ACCORDION 🚨 */}
+              {/* --- ENVIRONMENT VARIABLES ACCORDION --- */}
               <div className="border border-foreground/10 rounded-md overflow-hidden">
                 <button
                   onClick={() => setShowEnvVars(!showEnvVars)}
@@ -474,7 +516,6 @@ export default function NewProject() {
       </div>
 
       {/* --- PAGE 2: DEPLOYMENT STATUS --- */}
-      {/* ... [Rest of the file remains exactly the same] ... */}
       {deploymentId && (
         <div ref={deploymentSectionRef} className="p-6 lg:p-10 max-w-4xl mx-auto w-full flex flex-col gap-6 min-h-[calc(100vh-3.5rem)] pb-20 animate-in fade-in slide-in-from-bottom-8 duration-700">
           
